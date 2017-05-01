@@ -59,7 +59,7 @@ private:
 			return;
 		}
 
-		/*** set up new connection ***/
+		/*** accept new connection ***/
 
 		m_lookup[remoteName] = 0;
 
@@ -132,6 +132,10 @@ private:
 		 */
 		memcpy(buffer, data.getContent().value(), 3);
 		++m_lookup[remoteName];
+
+		/**
+		 * TODO: process data
+		 */
 
 		// debug
 		std::cout << "Received data:";

@@ -6,6 +6,8 @@
 #include <iostream>
 #include <string>
 #include <map>
+#include <chrono>
+#include <thread>
 
 class Controller
 {
@@ -18,17 +20,20 @@ public:
 		m_connGood = false;
 		m_face.setInterestFilter(m_baseName,
 								 std::bind(&Controller::onInterest, this, _2),
-								 std::bind([] {
-									std::cerr << "Prefix registered" << std::endl;
-								 }),
+								 std::bind(&Controller::onSuccess, this, _1),
 								 [] (const ndn::Name& prefix, const std::string& reason) {
 									std::cerr << "Failed to register prefix: " << reason << std::endl;
 								 });
-
-		requestNext();
 	}
 
 private:
+	void
+	onSuccess(const ndn::Name& prefix)
+	{
+		std::cerr << "Prefix registered" << std::endl;
+		requestNext();
+	}
+
 	void
 	onInterest(const ndn::Interest& interest)
 	{
@@ -40,32 +45,20 @@ private:
 		}
 
 		/*** send out data of keyboard input ***/
-
-		// create data packet with the same name as interest
-		std::shared_ptr<ndn::Data> data = std::make_shared<ndn::Data>(interest.getName());
-
-		// prepare and assign content of the data packet
-		std::string content = "xyz";
-		data->setContent(reinterpret_cast<const uint8_t*>(content.c_str()), content.size());
-
-		// set metainfo parameters
-		data->setFreshnessPeriod(ndn::time::seconds(10));
-
-		// sign data packet
-		m_keyChain.sign(*data);
-
-		// make data packet available for fetching
-		m_face.put(*data);
-
-		// debug
-		std::cout << "Sending data: " << content << std::endl;
+		sendData(interest.getName(), "xyz", 3);
 	}
 
 	void
 	onData(const ndn::Data& data)
 	{
+		if (m_connGood)
+		{
+			std::cerr << "Connection already set up!" << std::endl;
+			return;
+		}
+
 		// maybe some checking here...
-		// But currently, handshake doesn't contain any data
+		// But currently, "handshake" doesn't contain any data
 		m_connGood = true;
 
 		// debug
@@ -95,6 +88,29 @@ private:
 
 		// debug
 		std::cerr << "Sending out interest: " << m_baseName << std::endl;
+	}
+
+	// respond interest with data
+	void
+	sendData(const ndn::Name& dataName, const char *buf, size_t size)
+	{
+		// create data packet with the same name as interest
+		std::shared_ptr<ndn::Data> data = std::make_shared<ndn::Data>(dataName);
+
+		// prepare and assign content of the data packet
+		data->setContent(reinterpret_cast<const uint8_t*>(buf), size);
+
+		// set metainfo parameters
+		data->setFreshnessPeriod(ndn::time::seconds(10));
+
+		// sign data packet
+		m_keyChain.sign(*data);
+
+		// make data packet available for fetching
+		m_face.put(*data);
+
+		// debug
+		std::cout << "Sending data: " << std::string(buf, size) << std::endl;
 	}
 
 private:
