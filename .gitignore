@@ -3,7 +3,7 @@
 
 # waf generated things
 .lock-waf_darwin_build
-.waf-1.9.4-e36339e0a4d435a931dfe794a1bbfeb9/
+.waf-*/
 build/
 
 # Mac Thing...

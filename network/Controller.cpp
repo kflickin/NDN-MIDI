@@ -58,7 +58,7 @@ private:
 		m_face.put(*data);
 
 		// debug
-		std::cout << "Sending: " << content << std::endl;
+		std::cout << "Sending data: " << content << std::endl;
 	}
 
 	void
