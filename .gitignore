@@ -1,0 +1,5 @@
+*.o
+*.log
+
+# Mac Thing...
+.DS_Store
