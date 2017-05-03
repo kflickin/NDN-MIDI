@@ -8,13 +8,19 @@
 #include <map>
 #include <chrono>
 #include <thread>
+#include <deque>
+
+struct MIDIMessage
+{
+	char data[3];
+};
 
 class Controller
 {
 public:
-	Controller(ndn::Face& face, const std::string& remoteName, const std::string& projname)
+	Controller(ndn::Face& face, const std::string& remoteName, const std::string& projName)
 		: m_face(face)
-		, m_baseName(ndn::Name("/topo-prefix/" + remoteName + "/midi-ndn/" + projname))
+		, m_baseName(ndn::Name("/topo-prefix/" + remoteName + "/midi-ndn/" + projName))
 		, m_remoteName(remoteName)
 	{
 		m_connGood = false;
@@ -24,6 +30,27 @@ public:
 								 [] (const ndn::Name& prefix, const std::string& reason) {
 									std::cerr << "Failed to register prefix: " << reason << std::endl;
 								 });
+	}
+
+public:
+	void
+	addInput(MIDIMessage msg)
+	{
+		m_inputQueue.push_back(msg);
+	}
+
+	void
+	addInput(std::string msg)
+	{
+		MIDIMessage midiMsg;
+		for (unsigned int i = 0; i < 3; ++i)
+		{
+			if (i >= msg.size())
+				midiMsg.data[i] = 0;
+			else
+				midiMsg.data[i] = msg[i];
+		}
+		addInput(midiMsg);
 	}
 
 private:
@@ -39,13 +66,26 @@ private:
 	{
 		if (!m_connGood)
 		{
-			// ya tryin' to troll me?
+			// TODO: data and interest could indeed come in out of order
 			std::cerr << "Connection not set up yet!?" << std::endl;
 			return;
 		}
 
 		/*** send out data of keyboard input ***/
-		sendData(interest.getName(), "xyz", 3);
+
+		if (m_inputQueue.empty())
+		{
+			// TODO: since application is realtime
+			// maybe queue the interests and reply later???
+			std::cerr << "Received interest but no more data to send."
+					  << std::endl;
+		}
+		else
+		{
+			MIDIMessage midiMsg = m_inputQueue.front();
+			m_inputQueue.pop_front();
+			sendData(interest.getName(), midiMsg.data, 3);
+		}
 	}
 
 	void
@@ -57,9 +97,10 @@ private:
 			return;
 		}
 
-		// maybe some checking here...
+		// Set up connection (maybe do some checking here...)
 		// But currently, "handshake" doesn't contain any data
 		m_connGood = true;
+		//m_inputQueue.clear();
 
 		// debug
 		std::cout << "Received data: "
@@ -120,13 +161,15 @@ private:
 
 	bool m_connGood;
 	std::string m_remoteName;
+	std::deque<MIDIMessage> m_inputQueue;
 };
 
 int main(int argc, char *argv[])
 {
-	// getting remote name and project name
+	/*** argument parsing ***/
+
 	std::string remoteName = "";
-	std::string projname = "tmp-proj";
+	std::string projName = "tmp-proj";
 	
 	if (argc > 1)
 	{
@@ -140,15 +183,23 @@ int main(int argc, char *argv[])
 
 	if (argc > 2)
 	{
-		projname = argv[2];
+		projName = argv[2];
 	}
+
+	/*** NDN ***/
 
 	try {
 		// create Face instance
 		ndn::Face face;
 
 		// create server instance
-		Controller controller(face, remoteName, projname);
+		Controller controller(face, remoteName, projName);
+
+		for (int i = 0; i < 10; ++i)
+		{
+			controller.addInput("xyz");
+		}
+		controller.addInput("");	// sends 000
 
 		// start processing loop (it will block forever)
 		face.processEvents();

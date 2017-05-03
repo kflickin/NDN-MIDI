@@ -133,10 +133,6 @@ private:
 		memcpy(buffer, data.getContent().value(), 3);
 		++m_lookup[remoteName];
 
-		/**
-		 * TODO: process data
-		 */
-
 		// debug
 		std::cout << "Received data:";
 		for (int i = 0; i < 3; ++i)
@@ -145,8 +141,19 @@ private:
 		}
 		std::cout << std::endl;
 
-		if (m_lookup[remoteName] <= 10)
-			requestNext(remoteName);
+		// currently using a special message to shutdown... 
+		if (buffer[0] == 0 && buffer[1] == 0 && buffer[2] == 0)
+		{
+			std::cerr << "Deleting table entry of: " << remoteName << std::endl;
+			m_lookup.erase(remoteName);
+			return;
+		}
+
+		/**
+		 * TODO: process data
+		 */
+		
+		requestNext(remoteName);
 	}
 
 	void
