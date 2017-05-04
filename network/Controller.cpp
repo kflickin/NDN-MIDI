@@ -10,6 +10,8 @@
 #include <thread>
 #include <deque>
 
+#include <stdlib.h>
+
 struct MIDIMessage
 {
 	char data[3];
@@ -84,6 +86,10 @@ private:
 		{
 			MIDIMessage midiMsg = m_inputQueue.front();
 			m_inputQueue.pop_front();
+
+			// debug
+			std::cout << "Sending data: " << std::string(midiMsg.data, 3) << std::endl;
+
 			sendData(interest.getName(), midiMsg.data, 3);
 		}
 	}
@@ -149,9 +155,6 @@ private:
 
 		// make data packet available for fetching
 		m_face.put(*data);
-
-		// debug
-		std::cout << "Sending data: " << std::string(buf, size) << std::endl;
 	}
 
 private:
@@ -163,6 +166,20 @@ private:
 	std::string m_remoteName;
 	std::deque<MIDIMessage> m_inputQueue;
 };
+
+void input_listener(Controller& controller)
+{
+	while (true)
+	{
+		int input = std::cin.get();
+		if (input > 0)
+		{
+			controller.addInput("");
+			break;
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+}
 
 int main(int argc, char *argv[])
 {
@@ -199,7 +216,7 @@ int main(int argc, char *argv[])
 		{
 			controller.addInput("xyz");
 		}
-		controller.addInput("");	// sends 000
+		std::thread inputThread(input_listener, std::ref(controller));
 
 		// start processing loop (it will block forever)
 		face.processEvents();
