@@ -1,0 +1,342 @@
+#include <ndn-cxx/face.hpp>
+#include <ndn-cxx/interest.hpp>
+#include <ndn-cxx/data.hpp>
+#include <ndn-cxx/security/key-chain.hpp>
+
+#include <iostream>
+#include <string>
+#include <map>
+#include <chrono>
+#include <thread>
+#include <deque>
+
+#include <stdlib.h>
+#include "RtMidi.h"
+
+struct MIDIMessage
+{
+	char data[3];
+};
+
+class Controller
+{
+public:
+	Controller(ndn::Face& face, const std::string& remoteName, const std::string& projName)
+		: m_face(face)
+		, m_baseName(ndn::Name("/topo-prefix/" + remoteName + "/midi-ndn/" + projName))
+		, m_remoteName(remoteName)
+	{
+		m_connGood = false;
+		m_face.setInterestFilter(m_baseName,
+								 std::bind(&Controller::onInterest, this, _2),
+								 std::bind(&Controller::onSuccess, this, _1),
+								 [] (const ndn::Name& prefix, const std::string& reason) {
+									std::cerr << "Failed to register prefix: " << reason << std::endl;
+								 });
+	}
+
+public:
+	void
+	addInput(MIDIMessage msg)
+	{
+		m_inputQueue.push_back(msg);
+	}
+
+	void
+	addInput(std::string msg)
+	{
+		MIDIMessage midiMsg;
+		for (unsigned int i = 0; i < 3; ++i)
+		{
+			if (i >= msg.size())
+				midiMsg.data[i] = 0;
+			else
+				midiMsg.data[i] = msg[i];
+		}
+		addInput(midiMsg);
+	}
+
+	// Added for MIDI message vector
+
+	void
+	addInput(std::vector< unsigned char > msg)
+	{
+		MIDIMessage midiMsg;
+		for (unsigned int i = 0; i < 3; ++i)
+		{
+			if (i >= msg.size())
+				midiMsg.data[i] = 0;
+			else
+				msg[0] = 'a';
+				midiMsg.data[i] = msg[i];
+		}
+		addInput(midiMsg);
+	}
+private:
+	void
+	onSuccess(const ndn::Name& prefix)
+	{
+		std::cerr << "Prefix registered" << std::endl;
+		requestNext();
+	}
+
+	void
+	onInterest(const ndn::Interest& interest)
+	{
+		if (!m_connGood)
+		{
+			// TODO: data and interest could indeed come in out of order
+			std::cerr << "Connection not set up yet!?" << std::endl;
+			return;
+		}
+
+		/*** send out data of keyboard input ***/
+
+		if (m_inputQueue.empty())
+		{
+			// TODO: since application is realtime
+			// maybe queue the interests and reply later???
+			std::cerr << "Received interest but no more data to send."
+					  << std::endl;
+		}
+		else
+		{
+			MIDIMessage midiMsg = m_inputQueue.front();
+			m_inputQueue.pop_front();
+
+			// debug
+			std::cout << "Sending data: " << std::string(midiMsg.data, 3) << std::endl;
+
+			sendData(interest.getName(), midiMsg.data, 3);
+		}
+	}
+
+	void
+	onData(const ndn::Data& data)
+	{
+		if (m_connGood)
+		{
+			std::cerr << "Connection already set up!" << std::endl;
+			return;
+		}
+
+		// Set up connection (maybe do some checking here...)
+		// But currently, "handshake" doesn't contain any data
+		m_connGood = true;
+		//m_inputQueue.clear();
+
+		// debug
+		std::cout << "Received data: "
+				  << std::string(reinterpret_cast<const char*>(data.getContent().value()),
+															   data.getContent().value_size())
+				  << std::endl;
+	}
+
+	void
+	onTimeout(const ndn::Interest& interest)
+	{
+		// re-express interest
+		std::cerr << "Timeout for: " << interest << std::endl;
+		m_face.expressInterest(interest.getName(),
+								std::bind(&Controller::onData, this, _2),
+								std::bind(&Controller::onTimeout, this, _1));
+	}
+
+private:
+	void
+	requestNext()
+	{
+		m_face.expressInterest(ndn::Interest(m_baseName).setMustBeFresh(true),
+								std::bind(&Controller::onData, this, _2),
+								std::bind(&Controller::onTimeout, this, _1));
+
+		// debug
+		std::cerr << "Sending out interest: " << m_baseName << std::endl;
+	}
+
+	// respond interest with data
+	void
+	sendData(const ndn::Name& dataName, const char *buf, size_t size)
+	{
+		// create data packet with the same name as interest
+		std::shared_ptr<ndn::Data> data = std::make_shared<ndn::Data>(dataName);
+
+		// prepare and assign content of the data packet
+		data->setContent(reinterpret_cast<const uint8_t*>(buf), size);
+
+		// set metainfo parameters
+		data->setFreshnessPeriod(ndn::time::seconds(10));
+
+		// sign data packet
+		m_keyChain.sign(*data);
+
+		// make data packet available for fetching
+		m_face.put(*data);
+	}
+
+private:
+	ndn::Face& m_face;
+	ndn::KeyChain m_keyChain;
+	ndn::Name m_baseName;
+
+	bool m_connGood;
+	std::string m_remoteName;
+	std::deque<MIDIMessage> m_inputQueue;
+};
+
+void input_listener(Controller& controller)
+{
+	while (true)
+	{
+		int input = std::cin.get();
+		if (input > 0)
+		{
+			controller.addInput("");
+			break;
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+}
+
+// Beginning of RtMidi functions
+void usage( void ) {
+  // Error function in case of incorrect command-line
+  // argument specifications.
+  std::cout << "\nuseage: cmidiin <port>\n";
+  std::cout << "    where port = the device to use (default = 0).\n\n";
+  exit( 0 );
+}
+
+void mycallback( double deltatime, std::vector< unsigned char > *message, void */*userData*/ )
+{
+  unsigned int nBytes = message->size();
+  for ( unsigned int i=0; i<nBytes; i++ )
+    std::cout << "Byte " << i << " = " << (int)message->at(i) << ", ";
+  if ( nBytes > 0 )
+    std::cout << "stamp = " << deltatime << std::endl;
+}
+
+void bytecallback( double deltatime, std::vector< unsigned char > *message, void */*userData*/ )
+{
+  unsigned int nBytes = message->size();
+}
+
+// This function should be embedded in a try/catch block in case of
+// an exception.  It offers the user a choice of MIDI ports to open.
+// It returns false if there are no ports available.
+bool chooseMidiPort( RtMidiIn *rtmidi );
+// End of RtMidi functions
+
+
+int main(int argc, char *argv[])
+{
+	/*** argument parsing ***/
+
+	std::string remoteName = "";
+	std::string projName = "tmp-proj";
+	RtMidiIn *midiin = 0; //KELLY
+	std::vector<unsigned char> message; //KELLY
+	
+	if (argc > 1)
+	{
+		remoteName = argv[1];
+	}
+	else
+	{
+		std::cerr << "Must specify a remote name!" << std::endl;
+		return 1;
+	}
+
+	if (argc > 2)
+	{
+		projName = argv[2];
+	}
+
+	/*** MIDI SETUP ***/
+	try {
+
+		midiin = new RtMidiIn();
+		if ( chooseMidiPort( midiin ) == false ) goto cleanup;
+
+    	// Don't ignore sysex, timing, or active sensing messages.
+    	midiin->ignoreTypes( false, false, false );
+
+
+	} catch ( RtMidiError &error ) {
+		error.printMessage();
+	}
+	/*** END MIDI SETUP ***/
+
+	/*** NDN ***/
+
+	try {
+		// create Face instance
+		ndn::Face face;
+
+		// create server instance
+		Controller controller(face, remoteName, projName);
+
+		for (int i = 0; i < 10; ++i)
+		{
+			//Get MIDI Message
+			int nBytes;
+    		double stamp;
+			stamp = midiin->getMessage( &message );
+			nBytes = message.size();
+      		if (nBytes > 0){
+        		controller.addInput(message);
+      		}
+			
+		}
+		std::thread inputThread(input_listener, std::ref(controller));
+
+		// start processing loop (it will block forever)
+		face.processEvents();
+	}
+	catch (const std::exception& e) {
+		std::cerr << "ERROR: " << e.what() << std::endl;
+	}
+	//DELETE RtMidiIn instance
+	cleanup:
+		delete midiin;
+	return 0;
+}
+
+bool chooseMidiPort( RtMidiIn *rtmidi )
+{
+  std::cout << "\nWould you like to open a virtual input port? [y/N] ";
+
+  std::string keyHit;
+  std::getline( std::cin, keyHit );
+  if ( keyHit == "y" ) {
+    rtmidi->openVirtualPort();
+    return true;
+  }
+
+  std::string portName;
+  unsigned int i = 0, nPorts = rtmidi->getPortCount();
+  if ( nPorts == 0 ) {
+    std::cout << "No input ports available!" << std::endl;
+    return false;
+  }
+
+  if ( nPorts == 1 ) {
+    std::cout << "\nOpening " << rtmidi->getPortName() << std::endl;
+  }
+  else {
+    for ( i=0; i<nPorts; i++ ) {
+      portName = rtmidi->getPortName(i);
+      std::cout << "  Input port #" << i << ": " << portName << '\n';
+    }
+
+    do {
+      std::cout << "\nChoose a port number: ";
+      std::cin >> i;
+    } while ( i >= nPorts );
+    std::getline( std::cin, keyHit );  // used to clear out stdin
+  }
+
+  rtmidi->openPort( i );
+
+  return true;
+}
