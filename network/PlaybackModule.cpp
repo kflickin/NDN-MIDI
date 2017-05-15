@@ -27,6 +27,15 @@ user position = user position in received interest - 1 = -4
 
 #include <unistd.h>
 #include <string.h>
+#include <stdlib.h>
+
+#define PREWARM_AMOUNT 20
+
+struct MIDIControlBlock
+{
+	int minSeqNo;
+	int maxSeqNo;
+};
 
 class PlaybackModule
 {
@@ -61,7 +70,7 @@ private:
 
 		/*** accept new connection ***/
 
-		m_lookup[remoteName] = 0;
+		m_lookup[remoteName] = {0,0};
 
 		std::cerr << "connection accepted: " << interest << std::endl;
 
@@ -85,7 +94,11 @@ private:
 
 		/*** start sending out interest for next seq ***/
 
-		requestNext(remoteName);
+		// prewarm the channel with some interests
+		for (int i = 0; i < PREWARM_AMOUNT; ++i)
+		{
+			requestNext(remoteName);
+		}
 	}
 
 	void
@@ -105,11 +118,17 @@ private:
 		}
 
 		// CHECKPOINT 2: sequence number agrees
-		if (m_lookup[remoteName] != seqNo)
+		if (m_lookup[remoteName].minSeqNo >= m_lookup[remoteName].maxSeqNo)
 		{
-			// behavior yet to be defined
+			// behavior yet to be defined......
+			std::cerr << "Corrupted block: minSeqNo >= maxSeqNo"
+					  << std::endl;
+		}
+		if (m_lookup[remoteName].minSeqNo != seqNo)
+		{
+			// TODO: skip interests to be acked or drop packet
 			std::cerr << "Sequence number out of order --> "
-					  << "sent: " << m_lookup[remoteName]
+					  << "sent: " << m_lookup[remoteName].minSeqNo
 					  << "  rcvd: " << seqNo
 					  << std::endl;
 		}
@@ -131,7 +150,7 @@ private:
 		 * copy data and increment sequence number
 		 */
 		memcpy(buffer, data.getContent().value(), 3);
-		++m_lookup[remoteName];
+		m_lookup[remoteName].minSeqNo++;
 
 		// debug
 		std::cout << "Received data:";
@@ -139,7 +158,8 @@ private:
 		{
 			std::cout << " " << (int)buffer[i];
 		}
-		std::cout << std::endl;
+		std::cout << "\t[seq range = (" << m_lookup[remoteName].minSeqNo
+			<< "," << m_lookup[remoteName].maxSeqNo << ")]" << std::endl;
 
 		// currently using a special message to shutdown... 
 		if (buffer[0] == 0 && buffer[1] == 0 && buffer[2] == 0)
@@ -181,12 +201,12 @@ private:
 			return;
 		}
 
-		int nextSeqNo = m_lookup[remoteName];
+		int nextSeqNo = m_lookup[remoteName].maxSeqNo;
 		ndn::Name nextName = ndn::Name(m_baseName).appendSequenceNumber(nextSeqNo);
 		m_face.expressInterest(ndn::Interest(nextName).setMustBeFresh(true),
 								std::bind(&PlaybackModule::onData, this, _2),
 								std::bind(&PlaybackModule::onTimeout, this, _1));
-		//m_lookup[remoteName] = ++nextSeqNo;	// done in receiving data
+		m_lookup[remoteName].maxSeqNo++;
 
 		// debug
 		std::cerr << "Sending out interest: " << nextName << std::endl;
@@ -197,8 +217,8 @@ private:
 	ndn::KeyChain m_keyChain;
 	ndn::Name m_baseName;
 
-	// maps foreign hostname (remoteName) to its next seq number
-	std::map<std::string, int> m_lookup;
+	// maps foreign hostname (remoteName) to a control block
+	std::map<std::string, MIDIControlBlock> m_lookup;
 };
 
 int main(int argc, char *argv[])

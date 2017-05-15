@@ -22,3 +22,8 @@ def build (bld):
         features=['cxx', 'cxxprogram'],
         source='Controller.cpp',
         use='NDN_CXX')
+
+    #bld(target='ControllerMIDI',
+    #    features=['cxx', 'cxxprogram'],
+    #    source='ControllerMIDI.cpp',
+    #    use='NDN_CXX')
