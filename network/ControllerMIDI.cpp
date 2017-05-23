@@ -58,20 +58,20 @@ public:
 
 	// Added for MIDI message vector
 
-	void
-	addInput(std::vector< unsigned char > msg)
-	{
-		MIDIMessage midiMsg;
-		for (unsigned int i = 0; i < 3; ++i)
-		{
-			if (i >= msg.size())
-				midiMsg.data[i] = 0;
-			else
-				msg[0] = 'a';
-				midiMsg.data[i] = msg[i];
-		}
-		addInput(midiMsg);
-	}
+	// void
+	// addInput(std::vector< unsigned char > msg)
+	// {
+	// 	MIDIMessage midiMsg;
+	// 	for (unsigned int i = 0; i < 3; ++i)
+	// 	{
+	// 		if (i >= msg.size())
+	// 			midiMsg.data[i] = 0;
+	// 		else
+	// 			msg[0] = 'a';
+	// 			midiMsg.data[i] = msg[i];
+	// 	}
+	// 	addInput(midiMsg);
+	// }
 private:
 	void
 	onSuccess(const ndn::Name& prefix)
@@ -179,9 +179,14 @@ private:
 	ndn::KeyChain m_keyChain;
 	ndn::Name m_baseName;
 
+
 	bool m_connGood;
 	std::string m_remoteName;
 	std::deque<MIDIMessage> m_inputQueue;
+
+public:
+	//add RtMidiIn instance to the class
+	RtMidiIn *midiin;
 };
 
 void input_listener(Controller& controller)
@@ -227,6 +232,35 @@ void bytecallback( double deltatime, std::vector< unsigned char > *message, void
 bool chooseMidiPort( RtMidiIn *rtmidi );
 // End of RtMidi functions
 
+//Used in thread to get incoming midi messages
+void midiLoop(char input){
+	std::cin.get(input);
+}
+
+void midiLoopNoBLock(RtMidiIn *midiin, std::vector<unsigned char> message, Controller& controller){
+	bool done = false;
+	double stamp;
+	int nBytes;
+	char messageThree[3];
+	while ( !done ) {
+    	stamp = midiin->getMessage( &message );
+    	nBytes = message.size();
+    	// for (int i=0; i<nBytes; i++ ){
+     //  		std::cout << "Byte " << i << " = " << (unsigned char)message[i] << ", ";
+     //  	}
+    	if ( nBytes >= 3 ){
+    		//std::cout << std::endl;
+      		for (int i=0; i<nBytes; i++){
+      			if (i < 3){
+      				messageThree[i] = (unsigned char)message[i];
+      				//std::cout << (unsigned char)messageThree[i] << ", ";
+      			}
+      		}
+      		//std::cout << std::endl;
+      		controller.addInput(messageThree);
+		}
+	}
+}
 
 int main(int argc, char *argv[])
 {
@@ -234,7 +268,7 @@ int main(int argc, char *argv[])
 
 	std::string remoteName = "";
 	std::string projName = "tmp-proj";
-	RtMidiIn *midiin = 0; //KELLY
+	//RtMidiIn *midiin = 0; //KELLY
 	std::vector<unsigned char> message; //KELLY
 	
 	if (argc > 1)
@@ -252,22 +286,6 @@ int main(int argc, char *argv[])
 		projName = argv[2];
 	}
 
-	/*** MIDI SETUP ***/
-	try {
-
-		midiin = new RtMidiIn();
-		if ( chooseMidiPort( midiin ) == false ) goto cleanup;
-
-    	// Don't ignore sysex, timing, or active sensing messages.
-    	midiin->ignoreTypes( false, false, false );
-
-
-	} catch ( RtMidiError &error ) {
-		error.printMessage();
-	}
-	/*** END MIDI SETUP ***/
-
-	/*** NDN ***/
 
 	try {
 		// create Face instance
@@ -276,29 +294,24 @@ int main(int argc, char *argv[])
 		// create server instance
 		Controller controller(face, remoteName, projName);
 
-		for (int i = 0; i < 10; ++i)
-		{
-			//Get MIDI Message
-			int nBytes;
-    		double stamp;
-			stamp = midiin->getMessage( &message );
-			nBytes = message.size();
-      		if (nBytes > 0){
-        		controller.addInput(message);
-      		}
-			
-		}
-		std::thread inputThread(input_listener, std::ref(controller));
+		controller.midiin = new RtMidiIn();
+		if ( chooseMidiPort( controller.midiin ) == false ) goto cleanup;
+	 	//controller.midiin->setCallback( &mycallback );
 
-		// start processing loop (it will block forever)
+     	// Don't ignore sysex, timing, or active sensing messages.
+     	controller.midiin->ignoreTypes( true, true, true );
+
+     	std::cout << "\nReading MIDI input ... press <enter> to quit.\n";
+
+		std::thread midiThread(midiLoopNoBLock, controller.midiin, message, std::ref(controller));
 		face.processEvents();
 	}
 	catch (const std::exception& e) {
 		std::cerr << "ERROR: " << e.what() << std::endl;
 	}
 	//DELETE RtMidiIn instance
-	cleanup:
-		delete midiin;
+    cleanup:
+	// 	delete midiin;
 	return 0;
 }
 

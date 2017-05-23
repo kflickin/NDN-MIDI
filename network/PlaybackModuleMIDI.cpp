@@ -27,15 +27,17 @@ user position = user position in received interest - 1 = -4
 
 #include <unistd.h>
 #include <string.h>
-#include <stdlib.h>
 
-#define PREWARM_AMOUNT 20
+#include "RtMidi.h"
 
-struct MIDIControlBlock
-{
-	int minSeqNo;
-	int maxSeqNo;
-};
+// Platform-dependent sleep routines.
+#if defined(__WINDOWS_MM__)
+  #include <windows.h>
+  #define SLEEP( milliseconds ) Sleep( (DWORD) milliseconds ) 
+#else // Unix variants
+  #include <unistd.h>
+  #define SLEEP( milliseconds ) usleep( (unsigned long) (milliseconds * 1000.0) )
+#endif
 
 class PlaybackModule
 {
@@ -70,7 +72,7 @@ private:
 
 		/*** accept new connection ***/
 
-		m_lookup[remoteName] = {0,0};
+		m_lookup[remoteName] = 0;
 
 		std::cerr << "connection accepted: " << interest << std::endl;
 
@@ -94,11 +96,7 @@ private:
 
 		/*** start sending out interest for next seq ***/
 
-		// prewarm the channel with some interests
-		for (int i = 0; i < PREWARM_AMOUNT; ++i)
-		{
-			requestNext(remoteName);
-		}
+		requestNext(remoteName);
 	}
 
 	void
@@ -118,17 +116,11 @@ private:
 		}
 
 		// CHECKPOINT 2: sequence number agrees
-		if (m_lookup[remoteName].minSeqNo >= m_lookup[remoteName].maxSeqNo)
+		if (m_lookup[remoteName] != seqNo)
 		{
-			// behavior yet to be defined......
-			std::cerr << "Corrupted block: minSeqNo >= maxSeqNo"
-					  << std::endl;
-		}
-		if (m_lookup[remoteName].minSeqNo != seqNo)
-		{
-			// TODO: skip interests to be acked or drop packet
+			// behavior yet to be defined
 			std::cerr << "Sequence number out of order --> "
-					  << "sent: " << m_lookup[remoteName].minSeqNo
+					  << "sent: " << m_lookup[remoteName]
 					  << "  rcvd: " << seqNo
 					  << std::endl;
 		}
@@ -150,16 +142,22 @@ private:
 		 * copy data and increment sequence number
 		 */
 		memcpy(buffer, data.getContent().value(), 3);
-		m_lookup[remoteName].minSeqNo++;
+		++m_lookup[remoteName];
 
 		// debug
 		std::cout << "Received data:";
 		for (int i = 0; i < 3; ++i)
 		{
-			std::cout << " " << (int)buffer[i];
+			std::cout << " " << (unsigned char)buffer[i];
+			// for midi message
+			this->message[i] = (unsigned char)buffer[i];
+
 		}
-		std::cout << "\t[seq range = (" << m_lookup[remoteName].minSeqNo
-			<< "," << m_lookup[remoteName].maxSeqNo << ")]" << std::endl;
+		std::cout << std::endl;
+		// Playback of midi
+		if (this->message.size()==3){
+			this->midiout->sendMessage(&this->message);
+		}
 
 		// currently using a special message to shutdown... 
 		if (buffer[0] == 0 && buffer[1] == 0 && buffer[2] == 0)
@@ -201,12 +199,12 @@ private:
 			return;
 		}
 
-		int nextSeqNo = m_lookup[remoteName].maxSeqNo;
+		int nextSeqNo = m_lookup[remoteName];
 		ndn::Name nextName = ndn::Name(m_baseName).appendSequenceNumber(nextSeqNo);
 		m_face.expressInterest(ndn::Interest(nextName).setMustBeFresh(true),
 								std::bind(&PlaybackModule::onData, this, _2),
 								std::bind(&PlaybackModule::onTimeout, this, _1));
-		m_lookup[remoteName].maxSeqNo++;
+		//m_lookup[remoteName] = ++nextSeqNo;	// done in receiving data
 
 		// debug
 		std::cerr << "Sending out interest: " << nextName << std::endl;
@@ -217,9 +215,15 @@ private:
 	ndn::KeyChain m_keyChain;
 	ndn::Name m_baseName;
 
-	// maps foreign hostname (remoteName) to a control block
-	std::map<std::string, MIDIControlBlock> m_lookup;
+	// maps foreign hostname (remoteName) to its next seq number
+	std::map<std::string, int> m_lookup;
+
+public:
+	RtMidiOut *midiout;
+	std::vector<unsigned char> message;
 };
+
+bool chooseMidiPort( RtMidiOut *rtmidi );
 
 int main(int argc, char *argv[])
 {
@@ -227,6 +231,8 @@ int main(int argc, char *argv[])
 	char namebuf[64];
 	gethostname(namebuf, 64);
 	std::string hostname = namebuf;
+
+	
 
 	// get project name: default is tmp-proj
 	std::string projname = "tmp-proj";
@@ -241,6 +247,43 @@ int main(int argc, char *argv[])
 
 		// create server instance
 		PlaybackModule ndnModule(face, hostname, projname);
+		
+		// RtMidiOut setup
+		ndnModule.midiout = new RtMidiOut();
+		chooseMidiPort( ndnModule.midiout );
+
+		ndnModule.message.push_back( 192 );
+    	ndnModule.message.push_back( 5 );
+    	ndnModule.midiout->sendMessage( &ndnModule.message );
+
+		SLEEP( 500 );
+
+  		ndnModule.message[0] = 0xF1;
+  		ndnModule.message[1] = 60;
+  		ndnModule.midiout->sendMessage( &ndnModule.message );
+
+  		// Control Change: 176, 7, 100 (volume)
+  		ndnModule.message[0] = 176;
+  		ndnModule.message[1] = 7;
+  		ndnModule.message.push_back( 100 );
+  		ndnModule.midiout->sendMessage( &ndnModule.message );
+
+  		// Note On: 144, 64, 90
+  		ndnModule.message[0] = 144;
+  		ndnModule.message[1] = 64;
+  		ndnModule.message[2] = 90;
+  		ndnModule.midiout->sendMessage( &ndnModule.message );
+
+  		SLEEP( 500 );
+
+  		// Note Off: 128, 64, 40
+  		ndnModule.message[0] = 128;
+  		ndnModule.message[1] = 64;
+  		ndnModule.message[2] = 40;
+  		ndnModule.midiout->sendMessage( &ndnModule.message );
+
+  		SLEEP( 500 );
+
 
 		// start processing loop (it will block forever)
 		face.processEvents();
@@ -250,4 +293,43 @@ int main(int argc, char *argv[])
 	}
 
 	return 0;
+}
+
+bool chooseMidiPort( RtMidiOut *rtmidi )
+{
+  std::cout << "\nWould you like to open a virtual output port? [y/N] ";
+
+  std::string keyHit;
+  std::getline( std::cin, keyHit );
+  if ( keyHit == "y" ) {
+    rtmidi->openVirtualPort();
+    return true;
+  }
+
+  std::string portName;
+  unsigned int i = 0, nPorts = rtmidi->getPortCount();
+  if ( nPorts == 0 ) {
+    std::cout << "No output ports available!" << std::endl;
+    return false;
+  }
+
+  if ( nPorts == 1 ) {
+    std::cout << "\nOpening " << rtmidi->getPortName() << std::endl;
+  }
+  else {
+    for ( i=0; i<nPorts; i++ ) {
+      portName = rtmidi->getPortName(i);
+      std::cout << "  Output port #" << i << ": " << portName << '\n';
+    }
+
+    do {
+      std::cout << "\nChoose a port number: ";
+      std::cin >> i;
+    } while ( i >= nPorts );
+  }
+
+  std::cout << "\n";
+  rtmidi->openPort( i );
+
+  return true;
 }
