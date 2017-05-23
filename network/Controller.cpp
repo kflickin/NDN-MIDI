@@ -55,6 +55,23 @@ public:
 		addInput(midiMsg);
 	}
 
+	void
+	replyInterest()
+	{
+		if (!m_inputQueue.empty() && !m_interestQueue.empty())
+		{
+			MIDIMessage midiMsg = m_inputQueue.front();
+			m_inputQueue.pop_front();
+			ndn::Name interestName = m_interestQueue.front();
+			m_interestQueue.pop_front();
+			
+			// debug
+			std::cout << "Sending data: " << std::string(midiMsg.data, 3) << std::endl;
+			
+			sendData(interestName, midiMsg.data, 3);
+		}
+	}
+
 private:
 	void
 	onSuccess(const ndn::Name& prefix)
@@ -82,16 +99,9 @@ private:
 			std::cerr << "Received interest but no more data to send."
 					  << std::endl;
 		}
-		else
-		{
-			MIDIMessage midiMsg = m_inputQueue.front();
-			m_inputQueue.pop_front();
 
-			// debug
-			std::cout << "Sending data: " << std::string(midiMsg.data, 3) << std::endl;
-
-			sendData(interest.getName(), midiMsg.data, 3);
-		}
+		// TODO: consider out-of-order interest
+		m_interestQueue.push_back(interest.getName());
 	}
 
 	void
@@ -165,19 +175,27 @@ private:
 	bool m_connGood;
 	std::string m_remoteName;
 	std::deque<MIDIMessage> m_inputQueue;
+	std::deque<ndn::Name> m_interestQueue;
 };
 
 void input_listener(Controller& controller)
 {
+	// now simulates sending data
+	int counter = 0;
+	while (counter < 20)
+	{
+		controller.addInput("abc");
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		counter++;
+	}
+	controller.addInput("");
+}
+
+void output_sender(Controller& controller)
+{
 	while (true)
 	{
-		int input = std::cin.get();
-		if (input > 0)
-		{
-			controller.addInput("");
-			break;
-		}
-		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		controller.replyInterest();
 	}
 }
 
@@ -212,11 +230,8 @@ int main(int argc, char *argv[])
 		// create server instance
 		Controller controller(face, remoteName, projName);
 
-		for (int i = 0; i < 10; ++i)
-		{
-			controller.addInput("xyz");
-		}
 		std::thread inputThread(input_listener, std::ref(controller));
+		std::thread outputThread(output_sender, std::ref(controller));
 
 		// start processing loop (it will block forever)
 		face.processEvents();
