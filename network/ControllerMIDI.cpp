@@ -72,6 +72,24 @@ public:
 	// 	}
 	// 	addInput(midiMsg);
 	// }
+
+	void
+	replyInterest()
+	{
+		if (!m_inputQueue.empty() && !m_interestQueue.empty())
+		{
+			MIDIMessage midiMsg = m_inputQueue.front();
+			m_inputQueue.pop_front();
+			ndn::Name interestName = m_interestQueue.front();
+			m_interestQueue.pop_front();
+			
+			// debug
+			std::cout << "Sending data: " << std::string(midiMsg.data, 3) << std::endl;
+			
+			sendData(interestName, midiMsg.data, 3);
+		}
+	}
+
 private:
 	void
 	onSuccess(const ndn::Name& prefix)
@@ -99,16 +117,9 @@ private:
 			std::cerr << "Received interest but no more data to send."
 					  << std::endl;
 		}
-		else
-		{
-			MIDIMessage midiMsg = m_inputQueue.front();
-			m_inputQueue.pop_front();
 
-			// debug
-			std::cout << "Sending data: " << std::string(midiMsg.data, 3) << std::endl;
-
-			sendData(interest.getName(), midiMsg.data, 3);
-		}
+		// TODO: consider out-of-order interest
+		m_interestQueue.push_back(interest.getName());
 	}
 
 	void
@@ -179,16 +190,17 @@ private:
 	ndn::KeyChain m_keyChain;
 	ndn::Name m_baseName;
 
-
 	bool m_connGood;
 	std::string m_remoteName;
 	std::deque<MIDIMessage> m_inputQueue;
+	std::deque<ndn::Name> m_interestQueue;
 
 public:
 	//add RtMidiIn instance to the class
 	RtMidiIn *midiin;
 };
 
+// now basically what midiLoopNoBLock() is doing
 void input_listener(Controller& controller)
 {
 	while (true)
@@ -200,6 +212,14 @@ void input_listener(Controller& controller)
 			break;
 		}
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+}
+
+void output_sender(Controller& controller)
+{
+	while (true)
+	{
+		controller.replyInterest();
 	}
 }
 
@@ -304,6 +324,9 @@ int main(int argc, char *argv[])
      	std::cout << "\nReading MIDI input ... press <enter> to quit.\n";
 
 		std::thread midiThread(midiLoopNoBLock, controller.midiin, message, std::ref(controller));
+		std::thread outputThread(output_sender, std::ref(controller));
+
+		// start processing loop (it will block forever)
 		face.processEvents();
 	}
 	catch (const std::exception& e) {
