@@ -143,6 +143,7 @@ private:
 				  << std::endl;
 	}
 
+	/*
 	void
 	onTimeout(const ndn::Interest& interest)
 	{
@@ -152,14 +153,15 @@ private:
 								std::bind(&Controller::onData, this, _2),
 								std::bind(&Controller::onTimeout, this, _1));
 	}
+	*/
 
 private:
 	void
 	requestNext()
 	{
 		m_face.expressInterest(ndn::Interest(m_baseName).setMustBeFresh(true),
-								std::bind(&Controller::onData, this, _2),
-								std::bind(&Controller::onTimeout, this, _1));
+								std::bind(&Controller::onData, this, _2)/*,
+								std::bind(&Controller::onTimeout, this, _1)*/);
 
 		// debug
 		std::cerr << "Sending out interest: " << m_baseName << std::endl;

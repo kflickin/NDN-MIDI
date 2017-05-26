@@ -176,6 +176,7 @@ private:
 		requestNext(remoteName);
 	}
 
+	/***
 	void
 	onTimeout(const ndn::Interest& interest)
 	{
@@ -185,6 +186,7 @@ private:
 								std::bind(&PlaybackModule::onData, this, _2),
 								std::bind(&PlaybackModule::onTimeout, this, _1));
 	}
+	***/
 
 private:
 	void

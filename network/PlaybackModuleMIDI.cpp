@@ -175,7 +175,7 @@ private:
 		std::cout << std::endl;
 		std::cout << "\t[seq range = (" << m_lookup[remoteName].minSeqNo
 			<< "," << m_lookup[remoteName].maxSeqNo << ")]" << std::endl;
-		
+
 		// Playback of midi
 		if (this->message.size()==3){
 			this->midiout->sendMessage(&this->message);
@@ -196,6 +196,7 @@ private:
 		requestNext(remoteName);
 	}
 
+	/*
 	void
 	onTimeout(const ndn::Interest& interest)
 	{
@@ -205,6 +206,7 @@ private:
 								std::bind(&PlaybackModule::onData, this, _2),
 								std::bind(&PlaybackModule::onTimeout, this, _1));
 	}
+	*/
 
 private:
 	void
@@ -224,8 +226,8 @@ private:
 		int nextSeqNo = m_lookup[remoteName].maxSeqNo;
 		ndn::Name nextName = ndn::Name(m_baseName).appendSequenceNumber(nextSeqNo);
 		m_face.expressInterest(ndn::Interest(nextName).setMustBeFresh(true),
-								std::bind(&PlaybackModule::onData, this, _2),
-								std::bind(&PlaybackModule::onTimeout, this, _1));
+								std::bind(&PlaybackModule::onData, this, _2)/*,
+								std::bind(&PlaybackModule::onTimeout, this, _1)*/);
 		m_lookup[remoteName].maxSeqNo++;
 
 		// debug

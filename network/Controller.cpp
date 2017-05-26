@@ -125,6 +125,7 @@ private:
 				  << std::endl;
 	}
 
+	/***
 	void
 	onTimeout(const ndn::Interest& interest)
 	{
@@ -134,6 +135,7 @@ private:
 								std::bind(&Controller::onData, this, _2),
 								std::bind(&Controller::onTimeout, this, _1));
 	}
+	***/
 
 private:
 	void
