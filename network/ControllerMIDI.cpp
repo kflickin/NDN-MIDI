@@ -84,7 +84,21 @@ public:
 			m_interestQueue.pop_front();
 			
 			// debug
-			std::cout << "Sending data: " << std::string(midiMsg.data, 3) << std::endl;
+			//std::cout << "Sending data: " << std::string(midiMsg.data, 3) << std::endl;
+			unsigned char notetype = (unsigned char)midiMsg.data[0] & 240;
+			if (notetype == 144){
+				std::cout << "Sending Note On: ";
+			}
+			else if (notetype == 128) {
+				std::cout <<"Sending Note Off: ";
+			}
+			else {
+				std::cout << "Sending data: ";
+			}
+			for (int i = 0; i < 3; ++i) {
+				std::cout << " " << (int)midiMsg.data[i];
+			}
+			std::cout << std::endl;
 			
 			sendData(interestName, midiMsg.data, 3);
 		}

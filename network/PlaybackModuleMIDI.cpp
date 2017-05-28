@@ -164,10 +164,20 @@ private:
 		m_lookup[remoteName].minSeqNo++;
 
 		// debug
-		std::cout << "Received data:";
+		
+		unsigned char notetype = (unsigned char)buffer[0] & 240;
+		if (notetype == 144){
+			std::cout << "Receiving Note On: ";
+		}
+		else if (notetype == 128) {
+			std::cout <<"Receiving Note Off: ";
+		}
+		else {
+			std::cout << "Received data: ";
+		}
 		for (int i = 0; i < 3; ++i)
 		{
-			std::cout << " " << (unsigned char)buffer[i];
+			std::cout << " " << (int)buffer[i];
 			// for midi message
 			this->message[i] = (unsigned char)buffer[i];
 
@@ -338,16 +348,19 @@ int main(int argc, char *argv[])
 bool chooseMidiPort( RtMidiOut *rtmidi )
 {
   
-/**
+
   std::cout << "\nWould you like to open a virtual output port? [y/N] ";
 
   std::string keyHit;
-  std::getline( std::cin, keyHit );
+  std::getline( std::cin, keyHit);
+  std::string keyHit2 = "NDN";
   if ( keyHit == "y" ) {
-    rtmidi->openVirtualPort();
+  	//std::cout << "Name your port: ";
+  	//std::getline( std::cin, keyHit2);
+    rtmidi->openVirtualPort(keyHit2);
     return true;
   }
-  **/
+ 
 
   std::string portName;
   unsigned int i = 0, nPorts = rtmidi->getPortCount();
