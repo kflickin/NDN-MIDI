@@ -143,7 +143,7 @@ private:
 				  << std::endl;
 	}
 
-	/*
+	
 	void
 	onTimeout(const ndn::Interest& interest)
 	{
@@ -153,15 +153,15 @@ private:
 								std::bind(&Controller::onData, this, _2),
 								std::bind(&Controller::onTimeout, this, _1));
 	}
-	*/
+	
 
 private:
 	void
 	requestNext()
 	{
 		m_face.expressInterest(ndn::Interest(m_baseName).setMustBeFresh(true),
-								std::bind(&Controller::onData, this, _2)/*,
-								std::bind(&Controller::onTimeout, this, _1)*/);
+								std::bind(&Controller::onData, this, _2),
+								std::bind(&Controller::onTimeout, this, _1));
 
 		// debug
 		std::cerr << "Sending out interest: " << m_baseName << std::endl;
@@ -178,7 +178,7 @@ private:
 		data->setContent(reinterpret_cast<const uint8_t*>(buf), size);
 
 		// set metainfo parameters
-		data->setFreshnessPeriod(ndn::time::seconds(10));
+		data->setFreshnessPeriod(ndn::time::seconds(100));
 
 		// sign data packet
 		m_keyChain.sign(*data);
@@ -342,14 +342,16 @@ int main(int argc, char *argv[])
 
 bool chooseMidiPort( RtMidiIn *rtmidi )
 {
-  std::cout << "\nWould you like to open a virtual input port? [y/N] ";
+
+  // std::cout << "\nWould you like to open a virtual input port? [y/N] ";
 
   std::string keyHit;
-  std::getline( std::cin, keyHit );
-  if ( keyHit == "y" ) {
-    rtmidi->openVirtualPort();
-    return true;
-  }
+  // std::getline( std::cin, keyHit );
+  // if ( keyHit == "y" ) {
+  //   rtmidi->openVirtualPort();
+  //   return true;
+  // }
+  
 
   std::string portName;
   unsigned int i = 0, nPorts = rtmidi->getPortCount();

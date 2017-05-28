@@ -40,7 +40,7 @@ user position = user position in received interest - 1 = -4
   #define SLEEP( milliseconds ) usleep( (unsigned long) (milliseconds * 1000.0) )
 #endif
 
-#define PREWARM_AMOUNT 20
+#define PREWARM_AMOUNT 1
 
 struct MIDIControlBlock
 {
@@ -95,7 +95,7 @@ private:
 		data->setContent(reinterpret_cast<const uint8_t*>(content.c_str()), content.size());
 
 		// set metainfo parameters
-		data->setFreshnessPeriod(ndn::time::seconds(10));
+		data->setFreshnessPeriod(ndn::time::seconds(100)); 
 
 		// sign data packet
 		m_keyChain.sign(*data);
@@ -196,7 +196,7 @@ private:
 		requestNext(remoteName);
 	}
 
-	/*
+	
 	void
 	onTimeout(const ndn::Interest& interest)
 	{
@@ -206,7 +206,7 @@ private:
 								std::bind(&PlaybackModule::onData, this, _2),
 								std::bind(&PlaybackModule::onTimeout, this, _1));
 	}
-	*/
+	
 
 private:
 	void
@@ -224,10 +224,26 @@ private:
 		}
 
 		int nextSeqNo = m_lookup[remoteName].maxSeqNo;
+		
+
+		/** Send interest without specifying interest lifetime 
+
 		ndn::Name nextName = ndn::Name(m_baseName).appendSequenceNumber(nextSeqNo);
 		m_face.expressInterest(ndn::Interest(nextName).setMustBeFresh(true),
-								std::bind(&PlaybackModule::onData, this, _2)/*,
-								std::bind(&PlaybackModule::onTimeout, this, _1)*/);
+								std::bind(&PlaybackModule::onData, this, _2),
+								std::bind(&PlaybackModule::onTimeout, this, _1));
+		**/
+
+		// Send interest with long interest lifetime
+		ndn::Name nextName = ndn::Name(m_baseName).appendSequenceNumber(nextSeqNo);
+		ndn::Interest nextNameInterest = ndn::Interest(nextName);
+		nextNameInterest.setInterestLifetime(ndn::time::seconds(10000));
+		nextNameInterest.setMustBeFresh(true);
+		m_face.expressInterest(nextNameInterest,
+								std::bind(&PlaybackModule::onData, this, _2),
+								//std::bind(&PlaybackModule::onNack, this, _1, _2),
+								std::bind(&PlaybackModule::onTimeout, this, _1));
+
 		m_lookup[remoteName].maxSeqNo++;
 
 		// debug
@@ -321,6 +337,8 @@ int main(int argc, char *argv[])
 
 bool chooseMidiPort( RtMidiOut *rtmidi )
 {
+  
+/**
   std::cout << "\nWould you like to open a virtual output port? [y/N] ";
 
   std::string keyHit;
@@ -329,6 +347,7 @@ bool chooseMidiPort( RtMidiOut *rtmidi )
     rtmidi->openVirtualPort();
     return true;
   }
+  **/
 
   std::string portName;
   unsigned int i = 0, nPorts = rtmidi->getPortCount();
