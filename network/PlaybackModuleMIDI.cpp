@@ -71,7 +71,8 @@ private:
 	{
 		/*** check if connection already exist ***/
 
-		std::string remoteName = interest.getName().get(-3).toUri();;
+		// placeholder: maybe device name in the future
+		std::string remoteName = interest.getName().get(-3).toUri();
 
 		if (m_lookup.count(remoteName) > 0)
 		{
@@ -95,7 +96,7 @@ private:
 		data->setContent(reinterpret_cast<const uint8_t*>(content.c_str()), content.size());
 
 		// set metainfo parameters
-		data->setFreshnessPeriod(ndn::time::seconds(100)); 
+		data->setFreshnessPeriod(ndn::time::seconds(1)); 
 
 		// sign data packet
 		m_keyChain.sign(*data);
@@ -116,6 +117,7 @@ private:
 	onData(const ndn::Data& data)
 	{
 		int seqNo = data.getName().get(-1).toSequenceNumber();
+		// placeholder: maybe device name in the future?
 		std::string remoteName = data.getName().get(-4).toUri();
 
 		// CHECKPOINT 1: connection actually exist
@@ -247,7 +249,7 @@ private:
 		// Send interest with long interest lifetime
 		ndn::Name nextName = ndn::Name(m_baseName).appendSequenceNumber(nextSeqNo);
 		ndn::Interest nextNameInterest = ndn::Interest(nextName);
-		nextNameInterest.setInterestLifetime(ndn::time::seconds(10000));
+		nextNameInterest.setInterestLifetime(ndn::time::seconds(10));
 		nextNameInterest.setMustBeFresh(true);
 		m_face.expressInterest(nextNameInterest,
 								std::bind(&PlaybackModule::onData, this, _2),
