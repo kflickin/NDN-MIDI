@@ -74,6 +74,7 @@ private:
 		// placeholder: maybe device name in the future
 		std::string remoteName = interest.getName().get(-3).toUri();;
 
+
 		if (m_lookup.count(remoteName) > 0)
 		{
 			std::cerr << "connection request dropped: " << interest << std::endl;
