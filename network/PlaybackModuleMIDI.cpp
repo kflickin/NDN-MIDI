@@ -40,7 +40,7 @@ user position = user position in received interest - 1 = -4
   #define SLEEP( milliseconds ) usleep( (unsigned long) (milliseconds * 1000.0) )
 #endif
 
-#define PREWARM_AMOUNT 1
+#define PREWARM_AMOUNT 5
 
 struct MIDIControlBlock
 {
@@ -71,6 +71,7 @@ private:
 	{
 		/*** check if connection already exist ***/
 
+		// placeholder: maybe device name in the future
 		std::string remoteName = interest.getName().get(-3).toUri();;
 
 		if (m_lookup.count(remoteName) > 0)
@@ -95,7 +96,7 @@ private:
 		data->setContent(reinterpret_cast<const uint8_t*>(content.c_str()), content.size());
 
 		// set metainfo parameters
-		data->setFreshnessPeriod(ndn::time::seconds(100)); 
+		data->setFreshnessPeriod(ndn::time::seconds(1)); 
 
 		// sign data packet
 		m_keyChain.sign(*data);
@@ -116,6 +117,7 @@ private:
 	onData(const ndn::Data& data)
 	{
 		int seqNo = data.getName().get(-1).toSequenceNumber();
+		// placeholder: maybe device name in the future?
 		std::string remoteName = data.getName().get(-4).toUri();
 
 		// CHECKPOINT 1: connection actually exist
@@ -145,46 +147,38 @@ private:
 		}
 
 		// CHECKPOINT 3: data is in correct format
-		char buffer[3];
-		if (data.getContent().value_size() != 3)
-		{
-			// incorrect data format
-			// behavior yet to be defined
-			std::cerr << "Incorrect data format: len = "
-					  << data.getContent().value_size()
-					  << " (expected 3)"
-					  << std::endl;
-		}
+		char buffer[30];
+		int dataSize = data.getContent().value_size();
+		// if (data.getContent().value_size() != 3)
+		// {
+		// 	// incorrect data format
+		// 	// behavior yet to be defined
+		// 	std::cerr << "Incorrect data format: len = "
+		// 			  << data.getContent().value_size()
+		// 			  << " (expected 3)"
+		// 			  << std::endl;
+		// }
 
 		/**
 		 * Starting here all check points are passed
 		 * copy data and increment sequence number
 		 */
-		memcpy(buffer, data.getContent().value(), 3);
+		memcpy(buffer, data.getContent().value(), dataSize);
 		m_lookup[remoteName].minSeqNo++;
 
 		// debug
 		
-		unsigned char notetype = (unsigned char)buffer[0] & 240;
-		if (notetype == 144){
-			std::cout << "Receiving Note On: ";
-		}
-		else if (notetype == 128) {
-			std::cout <<"Receiving Note Off: ";
-		}
-		else {
-			std::cout << "Received data: ";
-		}
+		std::cout << "Received data: \n\t";
+		for (int j = 0; j < dataSize/3; ++j){
 		for (int i = 0; i < 3; ++i)
 		{
-			std::cout << " " << (int)buffer[i];
+			std::cout << " " << (int)buffer[i+(j*3)];
 			// for midi message
-			this->message[i] = (unsigned char)buffer[i];
+			this->message[i] = (unsigned char)buffer[i+(j*3)];
 
 		}
-		std::cout << std::endl;
-		std::cout << "\t[seq range = (" << m_lookup[remoteName].minSeqNo
-			<< "," << m_lookup[remoteName].maxSeqNo << ")]" << std::endl;
+		std::cout << "\n\t";
+
 
 		// Playback of midi
 		if (this->message.size()==3){
@@ -198,6 +192,10 @@ private:
 			m_lookup.erase(remoteName);
 			return;
 		}
+	}
+		//std::cout << std::endl;
+		std::cout << "\t[seq range = (" << m_lookup[remoteName].minSeqNo
+			<< "," << m_lookup[remoteName].maxSeqNo << ")]" << std::endl;
 
 		/**
 		 * TODO: process data
@@ -247,7 +245,7 @@ private:
 		// Send interest with long interest lifetime
 		ndn::Name nextName = ndn::Name(m_baseName).appendSequenceNumber(nextSeqNo);
 		ndn::Interest nextNameInterest = ndn::Interest(nextName);
-		nextNameInterest.setInterestLifetime(ndn::time::seconds(10000));
+		nextNameInterest.setInterestLifetime(ndn::time::seconds(10));
 		nextNameInterest.setMustBeFresh(true);
 		m_face.expressInterest(nextNameInterest,
 								std::bind(&PlaybackModule::onData, this, _2),
@@ -327,12 +325,20 @@ int main(int argc, char *argv[])
   		SLEEP( 500 );
 
   		// Note Off: 128, 64, 40
-  		ndnModule.message[0] = 128;
+  		ndnModule.message[0] = 144;
   		ndnModule.message[1] = 64;
-  		ndnModule.message[2] = 40;
+  		ndnModule.message[2] = 0;
   		ndnModule.midiout->sendMessage( &ndnModule.message );
 
   		SLEEP( 500 );
+
+  		// // Note Off: 128, 64, 40
+  		// ndnModule.message[0] = 128;
+  		// ndnModule.message[1] = 64;
+  		// ndnModule.message[2] = 40;
+  		// ndnModule.midiout->sendMessage( &ndnModule.message );
+
+  		// SLEEP( 500 );
 
 
 		// start processing loop (it will block forever)

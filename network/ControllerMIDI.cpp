@@ -78,29 +78,27 @@ public:
 	{
 		if (!m_inputQueue.empty() && !m_interestQueue.empty())
 		{
-			MIDIMessage midiMsg = m_inputQueue.front();
-			m_inputQueue.pop_front();
-			ndn::Name interestName = m_interestQueue.front();
-			m_interestQueue.pop_front();
+			int midiBufSize = 0;
+			std::cout << "Sending Data: \n";
+			while (!m_inputQueue.empty() && midiBufSize < 10){
+				midiBuf[midiBufSize] = m_inputQueue.front();
+				m_inputQueue.pop_front();
+
 			
 			// debug
 			//std::cout << "Sending data: " << std::string(midiMsg.data, 3) << std::endl;
-			unsigned char notetype = (unsigned char)midiMsg.data[0] & 240;
-			if (notetype == 144){
-				std::cout << "Sending Note On: ";
+				std::cout << "\t";
+				for (int i = 0; i < 3; ++i) {
+					std::cout << " " << (int)midiBuf[midiBufSize].data[i];
+				}
+				std::cout << "\n";
+				midiBufSize++;
 			}
-			else if (notetype == 128) {
-				std::cout <<"Sending Note Off: ";
-			}
-			else {
-				std::cout << "Sending data: ";
-			}
-			for (int i = 0; i < 3; ++i) {
-				std::cout << " " << (int)midiMsg.data[i];
-			}
-			std::cout << std::endl;
+			ndn::Name interestName = m_interestQueue.front();
+			m_interestQueue.pop_front();
+
+			sendData(interestName, (char *)midiBuf, midiBufSize*3);
 			
-			sendData(interestName, midiMsg.data, 3);
 		}
 	}
 
@@ -210,6 +208,7 @@ private:
 	std::string m_remoteName;
 	std::deque<MIDIMessage> m_inputQueue;
 	std::deque<ndn::Name> m_interestQueue;
+	MIDIMessage midiBuf[10]; // For multi-message sending
 
 public:
 	//add RtMidiIn instance to the class
