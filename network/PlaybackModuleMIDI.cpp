@@ -72,8 +72,7 @@ private:
 		/*** check if connection already exist ***/
 
 		// placeholder: maybe device name in the future
-		std::string remoteName = interest.getName().get(-3).toUri();;
-
+		std::string remoteName = interest.getName().get(-3).toUri();
 
 		if (m_lookup.count(remoteName) > 0)
 		{
