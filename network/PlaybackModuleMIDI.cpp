@@ -131,20 +131,21 @@ private:
 		}
 
 		// CHECKPOINT 2: sequence number agrees
-		if (m_lookup[remoteName].minSeqNo >= m_lookup[remoteName].maxSeqNo)
-		{
-			// behavior yet to be defined......
-			std::cerr << "Corrupted block: minSeqNo >= maxSeqNo"
-					  << std::endl;
-		}
-		if (m_lookup[remoteName].minSeqNo != seqNo)
-		{
-			// behavior yet to be defined
-			std::cerr << "Sequence number out of order --> "
-					  << "sent: " << m_lookup[remoteName].minSeqNo
-					  << "  rcvd: " << seqNo
-					  << std::endl;
-		}
+		// Now: done later
+		//if (m_lookup[remoteName].minSeqNo >= m_lookup[remoteName].maxSeqNo)
+		//{
+		//	// behavior yet to be defined......
+		//	std::cerr << "Corrupted block: minSeqNo >= maxSeqNo"
+		//			  << std::endl;
+		//}
+		//if (m_lookup[remoteName].minSeqNo != seqNo)
+		//{
+		//	// behavior yet to be defined
+		//	std::cerr << "Sequence number out of order --> "
+		//			  << "sent: " << m_lookup[remoteName].minSeqNo
+		//			  << "  rcvd: " << seqNo
+		//			  << std::endl;
+		//}
 
 		// CHECKPOINT 3: data is in correct format
 		char buffer[30];
@@ -164,7 +165,24 @@ private:
 		 * copy data and increment sequence number
 		 */
 		memcpy(buffer, data.getContent().value(), dataSize);
-		m_lookup[remoteName].minSeqNo++;
+		
+		MIDIControlBlock cb = m_lookup[remoteName];
+		if (cb.minSeqNo > seqNo)
+		{
+			// out-of-date data, drop
+			std::cerr << "Received out-of-date packet..." << std::endl;
+			return;
+		}
+		else if (cb.maxSeqNo < seqNo)
+		{
+			// ???
+			std::cerr << "Received packet w/ seq# somehow larger than "
+					  << "expected max value: " << seqNo
+					  << " (" << cb.maxSeqNo << ")" << std::endl;
+		}
+
+		// currently no waiting time for more packets to be received
+		m_lookup[remoteName].minSeqNo += (seqNo - cb.minSeqNo + 1);
 
 		// debug
 		

@@ -97,8 +97,12 @@ public:
 			ndn::Name interestName = m_interestQueue.front();
 			m_interestQueue.pop_front();
 
-			sendData(interestName, (char *)midiBuf, midiBufSize*3);
-			
+			int seqNo = interestName.get(-1).toSequenceNumber();
+			if (seqNo >= m_minSeqNo)
+			{
+				m_minSeqNo = seqNo;
+				sendData(interestName, (char *)midiBuf, midiBufSize*3);
+			}
 		}
 	}
 
@@ -130,8 +134,10 @@ private:
 					  << std::endl;
 		}
 
-		// TODO: consider out-of-order interest
-		m_interestQueue.push_back(interest.getName());
+		// consider out-of-order or retransmitted interest
+		int seqNo = interest.getName().get(-1).toSequenceNumber();
+		if (seqNo >= m_minSeqNo)
+			m_interestQueue.push_back(interest.getName());
 	}
 
 	void
@@ -146,7 +152,8 @@ private:
 		// Set up connection (maybe do some checking here...)
 		// But currently, "handshake" doesn't contain any data
 		m_connGood = true;
-		//m_inputQueue.clear();
+		m_inputQueue.clear();
+		m_minSeqNo = 0;	// reset seqNo tracking
 
 		// debug
 		std::cout << "Received data: "
@@ -209,6 +216,8 @@ private:
 	std::deque<MIDIMessage> m_inputQueue;
 	std::deque<ndn::Name> m_interestQueue;
 	MIDIMessage midiBuf[10]; // For multi-message sending
+
+	int m_minSeqNo;
 
 public:
 	//add RtMidiIn instance to the class
