@@ -294,17 +294,15 @@ bool chooseMidiPort( RtMidiOut *rtmidi );
 int main(int argc, char *argv[])
 {
 	// get unique user name
-	char namebuf[64];
-	gethostname(namebuf, 64);
-	std::string hostname = namebuf;
-
-	
+	//char namebuf[64];
+	//gethostname(namebuf, 64);
+	std::string hostname = argv[1];
 
 	// get project name: default is tmp-proj
 	std::string projname = "tmp-proj";
-	if (argc > 1)
+	if (argc > 2)
 	{
-		projname = argv[1];
+		projname = argv[2];
 	}
 
 	try {
