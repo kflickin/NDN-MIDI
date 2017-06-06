@@ -24,6 +24,8 @@ user position = user position in received interest - 1 = -4
 #include <iostream>
 #include <string>
 #include <map>
+#include <chrono>
+#include <thread>
 
 #include <unistd.h>
 #include <string.h>
@@ -69,22 +71,28 @@ private:
 	void
 	onInterest(const ndn::Interest& interest)
 	{
+		if (interest.getName().get(-1).toUri() != "heartbeat")
+			return;
+
 		/*** check if connection already exist ***/
+		bool isHeartbeat = false;
 
 		// placeholder: maybe device name in the future
-		std::string remoteName = interest.getName().get(-3).toUri();
+		std::string remoteName = interest.getName().get(-4).toUri();
 
 		if (m_lookup.count(remoteName) > 0)
 		{
-			std::cerr << "connection request dropped: " << interest << std::endl;
-			return;
+			std::cerr << "Received heartbeat message: " << interest << std::endl;
+			isHeartbeat = true;
 		}
 
 		/*** accept new connection ***/
 
-		m_lookup[remoteName] = {0,0};
-
-		std::cerr << "connection accepted: " << interest << std::endl;
+		if (!isHeartbeat)
+		{
+			m_lookup[remoteName] = {0,0};
+			std::cerr << "Connection accepted: " << interest << std::endl;
+		}
 
 		/*** respond to connection request ***/
 
@@ -106,16 +114,23 @@ private:
 
 		/*** start sending out interest for next seq ***/
 
-		// prewarm the channel with some interests
-		for (int i = 0; i < PREWARM_AMOUNT; ++i)
+		if (!isHeartbeat)
 		{
-			requestNext(remoteName);
+			std::this_thread::sleep_for(std::chrono::milliseconds(20));
+			// prewarm the channel with some interests
+			for (int i = 0; i < PREWARM_AMOUNT; ++i)
+			{
+				requestNext(remoteName);
+			}
 		}
 	}
 
 	void
 	onData(const ndn::Data& data)
 	{
+		if (data.getName().get(-1).toUri() == "heartbeat")
+			return;
+
 		int seqNo = data.getName().get(-1).toSequenceNumber();
 		// placeholder: maybe device name in the future?
 		std::string remoteName = data.getName().get(-4).toUri();

@@ -13,6 +13,8 @@
 #include <stdlib.h>
 #include "RtMidi.h"
 
+#define HEAERTBEAT_PERIOD_S 1
+
 struct MIDIMessage
 {
 	char data[3];
@@ -27,6 +29,8 @@ public:
 		, m_remoteName(remoteName)
 	{
 		m_connGood = false;
+		m_hbCount = 0;
+		heartbeatNonce = 0;
 		m_face.setInterestFilter(m_baseName,
 								 std::bind(&Controller::onInterest, this, _2),
 								 std::bind(&Controller::onSuccess, this, _1),
@@ -107,7 +111,8 @@ private:
 	onSuccess(const ndn::Name& prefix)
 	{
 		std::cerr << "Prefix registered" << std::endl;
-		requestNext();
+		//requestNext();
+		heartbeatProbe = std::thread(&Controller::sendHeartbeat, this);
 	}
 
 	void
@@ -147,15 +152,23 @@ private:
 	void
 	onData(const ndn::Data& data)
 	{
+		if (data.getName().get(-1).toUri() != "heartbeat")
+		{
+			//std::cerr << ":P" << std::endl;
+			return;
+		}
+
 		if (m_connGood)
 		{
-			std::cerr << "Connection already set up!" << std::endl;
+			std::cerr << "Heartbeat!" << std::endl;
+			m_hbCount = 0;
 			return;
 		}
 
 		// Set up connection (maybe do some checking here...)
 		// But currently, "handshake" doesn't contain any data
 		m_connGood = true;
+		m_hbCount = 0;
 		m_inputQueue.clear();
 		m_maxSeqNo = 0;	// reset seqNo tracking
 
@@ -164,17 +177,19 @@ private:
 				  << std::string(reinterpret_cast<const char*>(data.getContent().value()),
 															   data.getContent().value_size())
 				  << std::endl;
+
+		std::cout << "Data name: " << data.getName().toUri() << std::endl;
 	}
 
 	
 	void
 	onTimeout(const ndn::Interest& interest)
 	{
-		// re-express interest
-		std::cerr << "Timeout for: " << interest << std::endl;
-		m_face.expressInterest(interest.getName(),
-								std::bind(&Controller::onData, this, _2),
-								std::bind(&Controller::onTimeout, this, _1));
+		// re-express interest: no need to retransmit for this case (?)
+		//std::cerr << "Timeout for: " << interest << std::endl;
+		//m_face.expressInterest(interest.getName(),
+		//						std::bind(&Controller::onData, this, _2),
+		//						std::bind(&Controller::onTimeout, this, _1));
 	}
 	
 
@@ -182,10 +197,13 @@ private:
 	void
 	requestNext()
 	{
-		m_face.expressInterest(ndn::Interest(m_baseName).setMustBeFresh(true),
-								std::bind(&Controller::onData, this, _2),
-								std::bind(&Controller::onTimeout, this, _1));
-
+		m_face.expressInterest(ndn::Interest(ndn::Name(m_baseName).append("heartbeat"))
+								.setMustBeFresh(true)
+								.setInterestLifetime(ndn::time::seconds(HEAERTBEAT_PERIOD_S))
+								.setNonce(heartbeatNonce),
+								std::bind(&Controller::onData, this, _2));
+								//std::bind(&Controller::onTimeout, this, _1));
+		heartbeatNonce++;
 		// debug
 		std::cerr << "Sending out interest: " << m_baseName << std::endl;
 	}
@@ -210,6 +228,25 @@ private:
 		m_face.put(*data);
 	}
 
+	void
+	sendHeartbeat()
+	{
+		while (true)
+		{
+			m_hbCount += 1;
+			requestNext();
+			std::cerr << "HEARTBEAT: " << m_hbCount << std::endl;
+
+			if (m_hbCount > 3 && m_connGood)
+			{
+				std::cerr << "Heartbeat failed! Resetting connection..." << std::endl;
+				m_connGood = false;
+			}
+
+			std::this_thread::sleep_for(std::chrono::seconds(HEAERTBEAT_PERIOD_S));
+		}
+	}
+
 private:
 	ndn::Face& m_face;
 	ndn::KeyChain m_keyChain;
@@ -222,6 +259,10 @@ private:
 	MIDIMessage midiBuf[10]; // For multi-message sending
 
 	int m_maxSeqNo;
+	int m_hbCount;
+
+	std::thread heartbeatProbe;
+	int heartbeatNonce;
 
 public:
 	//add RtMidiIn instance to the class

@@ -1,5 +1,5 @@
-CXXFLAGS  =-std=c++11 $(shell pkg-config --cflags libndn-cxx) 
-LDFLAGS =-std=c++11 $(shell pkg-config --libs libndn-cxx) -Wall -D __MACOSX_CORE__ -framework CoreMIDI -framework CoreAudio -framework CoreFoundation
+CXXFLAGS  =-std=c++11 $(shell pkg-config --cflags libndn-cxx)  -pthread
+LDFLAGS =-std=c++11 $(shell pkg-config --libs libndn-cxx) -Wall -D __MACOSX_CORE__ -framework CoreMIDI -framework CoreAudio -framework CoreFoundation -pthread
 CXX = g++
 CC = $(CXX)
 CONTROLLER = ControllerMIDI
