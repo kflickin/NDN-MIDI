@@ -170,7 +170,7 @@ private:
 		if (cb.minSeqNo > seqNo)
 		{
 			// out-of-date data, drop
-			std::cerr << "Received out-of-date packet..." << std::endl;
+			std::cerr << "Received out-of-date packet... Dropped" << std::endl;
 			return;
 		}
 		else if (cb.maxSeqNo < seqNo)
@@ -228,9 +228,9 @@ private:
 	{
 		// re-express interest
 		std::cerr << "Timeout for: " << interest << std::endl;
-		m_face.expressInterest(interest.getName(),
-								std::bind(&PlaybackModule::onData, this, _2),
-								std::bind(&PlaybackModule::onTimeout, this, _1));
+		//m_face.expressInterest(interest,
+		//						std::bind(&PlaybackModule::onData, this, _2),
+		//						std::bind(&PlaybackModule::onTimeout, this, _1));
 	}
 	
 
@@ -263,7 +263,7 @@ private:
 		// Send interest with long interest lifetime
 		ndn::Name nextName = ndn::Name(m_baseName).appendSequenceNumber(nextSeqNo);
 		ndn::Interest nextNameInterest = ndn::Interest(nextName);
-		nextNameInterest.setInterestLifetime(ndn::time::seconds(10));
+		nextNameInterest.setInterestLifetime(ndn::time::seconds(3600));
 		nextNameInterest.setMustBeFresh(true);
 		m_face.expressInterest(nextNameInterest,
 								std::bind(&PlaybackModule::onData, this, _2),
