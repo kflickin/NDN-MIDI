@@ -188,10 +188,11 @@ private:
 		}
 		else if (cb.maxSeqNo < seqNo)
 		{
-			// ???
+			// drop this, too
 			std::cerr << "Received packet w/ seq# somehow larger than "
 					  << "expected max value: " << seqNo
 					  << " (" << cb.maxSeqNo << ")" << std::endl;
+			return;
 		}
 
 		// currently no waiting time for more packets to be received

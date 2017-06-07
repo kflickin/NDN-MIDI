@@ -83,7 +83,10 @@ public:
 	{
 		// if not connected, queue will be cleared
 		if (!m_connGood)
+		{
 			m_inputQueue.clear();
+			m_interestQueue.clear();
+		}
 
 		if (!m_inputQueue.empty() && !m_interestQueue.empty())
 		{
@@ -175,6 +178,7 @@ private:
 		m_connGood = true;
 		m_hbCount = 0;
 		m_inputQueue.clear();
+		m_interestQueue.clear();
 		m_maxSeqNo = 0;	// reset seqNo tracking
 
 		// debug
