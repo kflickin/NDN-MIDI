@@ -14,6 +14,7 @@
 #include "RtMidi.h"
 
 #define HEAERTBEAT_PERIOD_S 1
+#define MAX_HEARTBEAT_PROBE 3
 
 struct MIDIMessage
 {
@@ -80,6 +81,10 @@ public:
 	void
 	replyInterest()
 	{
+		// if not connected, queue will be cleared
+		if (!m_connGood)
+			m_inputQueue.clear();
+
 		if (!m_inputQueue.empty() && !m_interestQueue.empty())
 		{
 			int midiBufSize = 0;
@@ -237,7 +242,7 @@ private:
 			requestNext();
 			std::cerr << "HEARTBEAT: " << m_hbCount << std::endl;
 
-			if (m_hbCount > 3 && m_connGood)
+			if (m_hbCount > MAX_HEARTBEAT_PROBE && m_connGood)
 			{
 				std::cerr << "Heartbeat failed! Resetting connection..." << std::endl;
 				m_connGood = false;

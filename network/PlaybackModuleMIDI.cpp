@@ -24,8 +24,6 @@ user position = user position in received interest - 1 = -4
 #include <iostream>
 #include <string>
 #include <map>
-#include <chrono>
-#include <thread>
 
 #include <unistd.h>
 #include <string.h>
@@ -116,7 +114,7 @@ private:
 
 		if (!isHeartbeat)
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(20));
+			SLEEP(10);
 			// prewarm the channel with some interests
 			for (int i = 0; i < PREWARM_AMOUNT; ++i)
 			{
@@ -308,6 +306,12 @@ bool chooseMidiPort( RtMidiOut *rtmidi );
 
 int main(int argc, char *argv[])
 {
+	if (argc <= 1)
+	{
+		std::cerr << "Need to specify your identifier name" << std::endl;
+		exit(1);
+	}
+
 	// get unique user name
 	//char namebuf[64];
 	//gethostname(namebuf, 64);
