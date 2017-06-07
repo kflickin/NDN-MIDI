@@ -196,7 +196,8 @@ private:
 		}
 
 		// currently no waiting time for more packets to be received
-		m_lookup[remoteName].minSeqNo += (seqNo - cb.minSeqNo + 1);
+		int diff = seqNo - cb.minSeqNo + 1;
+		m_lookup[remoteName].minSeqNo += diff;
 
 		// debug
 		
@@ -233,7 +234,10 @@ private:
 		 * TODO: process data
 		 */
 		
-		requestNext(remoteName);
+		for (int i = 0; i < diff; ++i)
+		{
+			requestNext(remoteName);
+		}
 	}
 
 	
