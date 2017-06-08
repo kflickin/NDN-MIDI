@@ -298,6 +298,7 @@ void output_sender(Controller& controller)
 	while (true)
 	{
 		controller.replyInterest();
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 }
 
