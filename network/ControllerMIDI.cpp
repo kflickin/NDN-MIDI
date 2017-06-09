@@ -26,10 +26,13 @@ struct MIDIMessage
 class Controller
 {
 public:
-	Controller(ndn::Face& face, const std::string& remoteName, const std::string& projName)
+	Controller(ndn::Face& face, const std::string& remoteName,
+	const std::string& devName, const std::string& projName)
 		: m_face(face)
-		, m_baseName(ndn::Name("/topo-prefix/" + remoteName + "/midi-ndn/" + projName))
+		, m_baseName(ndn::Name("/topo-prefix/" + devName + "/midi-ndn/" + projName))
 		, m_remoteName(remoteName)
+		, m_devName(devName)
+		, m_projName(projName)
 	{
 		srand(sysclock::to_time_t(sysclock::now()));
 		m_connGood = false;
@@ -210,7 +213,9 @@ private:
 	requestNext()
 	{
 		heartbeatNonce = rand();
-		m_face.expressInterest(ndn::Interest(ndn::Name(m_baseName).append("heartbeat"))
+		m_face.expressInterest(ndn::Interest(ndn::Name(
+											"/topo-prefix/" + m_remoteName + "/midi-ndn/" + m_projName
+											).append(m_devName + "/heartbeat"))
 								.setMustBeFresh(true)
 								.setInterestLifetime(ndn::time::seconds(HEAERTBEAT_PERIOD_S))
 								.setNonce(heartbeatNonce),
@@ -264,8 +269,11 @@ private:
 	ndn::KeyChain m_keyChain;
 	ndn::Name m_baseName;
 
+	std::string m_projName;
+
 	bool m_connGood;
 	std::string m_remoteName;
+	std::string m_devName;
 	std::deque<MIDIMessage> m_inputQueue;
 	std::deque<ndn::Name> m_interestQueue;
 	MIDIMessage midiBuf[10]; // For multi-message sending
@@ -368,24 +376,26 @@ int main(int argc, char *argv[])
 {
 	/*** argument parsing ***/
 
-	std::string remoteName = "";
+	std::string remoteName;
+	std::string devName;
 	std::string projName = "tmp-proj";
 	//RtMidiIn *midiin = 0; //KELLY
 	std::vector<unsigned char> message; //KELLY
 	
-	if (argc > 1)
+	if (argc > 2)
 	{
 		remoteName = argv[1];
+		devName = argv[2];
 	}
 	else
 	{
-		std::cerr << "Must specify a remote name!" << std::endl;
+		std::cerr << "Must specify a remote name and device name!" << std::endl;
 		return 1;
 	}
 
-	if (argc > 2)
+	if (argc > 3)
 	{
-		projName = argv[2];
+		projName = argv[3];
 	}
 
 
@@ -394,7 +404,7 @@ int main(int argc, char *argv[])
 		ndn::Face face;
 
 		// create server instance
-		Controller controller(face, remoteName, projName);
+		Controller controller(face, remoteName, devName, projName);
 
 		controller.midiin = new RtMidiIn();
 		if ( chooseMidiPort( controller.midiin ) == false ) goto cleanup;

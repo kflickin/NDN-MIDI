@@ -54,6 +54,7 @@ public:
 	PlaybackModule(ndn::Face& face, const std::string& hostname, const std::string& projname)
 		: m_face(face)
 		, m_baseName(ndn::Name("/topo-prefix/" + hostname + "/midi-ndn/" + projname))
+		, m_projName(projname)
 	{
 		m_face.setInterestFilter(m_baseName,
 								 std::bind(&PlaybackModule::onInterest, this, _2),
@@ -76,7 +77,7 @@ private:
 		bool isHeartbeat = false;
 
 		// placeholder: maybe device name in the future
-		std::string remoteName = interest.getName().get(-4).toUri();
+		std::string remoteName = interest.getName().get(-2).toUri();
 
 		if (m_lookup.count(remoteName) > 0)
 		{
@@ -279,7 +280,8 @@ private:
 		**/
 
 		// Send interest with long interest lifetime
-		ndn::Name nextName = ndn::Name(m_baseName).appendSequenceNumber(nextSeqNo);
+		ndn::Name nextName = ndn::Name("/topo-prefix/" + remoteName + "/midi-ndn/" + m_projName)
+				.appendSequenceNumber(nextSeqNo);
 		ndn::Interest nextNameInterest = ndn::Interest(nextName);
 		nextNameInterest.setInterestLifetime(ndn::time::seconds(3600));
 		nextNameInterest.setMustBeFresh(true);
@@ -298,6 +300,8 @@ private:
 	ndn::Face& m_face;
 	ndn::KeyChain m_keyChain;
 	ndn::Name m_baseName;
+
+	std::string m_projName;
 
 	// maps foreign hostname (remoteName) to a control block
 	std::map<std::string, MIDIControlBlock> m_lookup;
