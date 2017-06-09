@@ -16,6 +16,8 @@
 #define HEAERTBEAT_PERIOD_S 1
 #define MAX_HEARTBEAT_PROBE 3
 
+using sysclock = std::chrono::system_clock;
+
 struct MIDIMessage
 {
 	char data[3];
@@ -29,9 +31,10 @@ public:
 		, m_baseName(ndn::Name("/topo-prefix/" + remoteName + "/midi-ndn/" + projName))
 		, m_remoteName(remoteName)
 	{
+		srand(sysclock::to_time_t(sysclock::now()));
 		m_connGood = false;
 		m_hbCount = 0;
-		heartbeatNonce = 0;
+		heartbeatNonce = rand();
 		m_face.setInterestFilter(m_baseName,
 								 std::bind(&Controller::onInterest, this, _2),
 								 std::bind(&Controller::onSuccess, this, _1),
@@ -206,13 +209,13 @@ private:
 	void
 	requestNext()
 	{
+		heartbeatNonce = rand();
 		m_face.expressInterest(ndn::Interest(ndn::Name(m_baseName).append("heartbeat"))
 								.setMustBeFresh(true)
 								.setInterestLifetime(ndn::time::seconds(HEAERTBEAT_PERIOD_S))
 								.setNonce(heartbeatNonce),
 								std::bind(&Controller::onData, this, _2));
 								//std::bind(&Controller::onTimeout, this, _1));
-		heartbeatNonce++;
 		// debug
 		std::cerr << "Sending out interest: " << m_baseName << std::endl;
 	}
@@ -298,7 +301,7 @@ void output_sender(Controller& controller)
 	while (true)
 	{
 		controller.replyInterest();
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		//std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 }
 
