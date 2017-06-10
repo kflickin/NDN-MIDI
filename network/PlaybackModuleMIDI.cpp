@@ -24,6 +24,7 @@ user position = user position in received interest - 1 = -4
 #include <iostream>
 #include <string>
 #include <map>
+#include <thread>
 
 #include <unistd.h>
 #include <string.h>
@@ -41,11 +42,13 @@ user position = user position in received interest - 1 = -4
 #endif
 
 #define PREWARM_AMOUNT 5
+#define MAX_INACTIVE_TIME 5
 
 struct MIDIControlBlock
 {
 	int minSeqNo;
 	int maxSeqNo;
+	int inactiveTime;
 };
 
 class PlaybackModule
@@ -64,6 +67,7 @@ public:
 								 [] (const ndn::Name& prefix, const std::string& reason) {
 									std::cerr << "Failed to register prefix: " << reason << std::endl;
 								 });
+		cbMonitor = std::thread(&PlaybackModule::controlBlockMonitoring, this);
 	}
 
 private:
@@ -83,6 +87,7 @@ private:
 		{
 			std::cerr << "Received heartbeat message: " << interest << std::endl;
 			isHeartbeat = true;
+			m_lookup[remoteName].inactiveTime = 0;
 		}
 
 		/*** accept new connection ***/
@@ -296,6 +301,33 @@ private:
 		std::cerr << "Sending out interest: " << nextName << std::endl;
 	}
 
+	// update all control blocks every second
+	// and remove block if not hearing from it for too long
+	void
+	controlBlockMonitoring()
+	{
+		while (true)
+		{
+			SLEEP(1000);
+			std::vector<std::string> rmList;
+			for (std::map<std::string, MIDIControlBlock>::iterator it = m_lookup.begin();
+				it != m_lookup.end(); ++it)
+			{
+				if (++it->second.inactiveTime > MAX_INACTIVE_TIME)
+				{
+					rmList.push_back(it->first);
+				}
+			}
+
+			for (std::string& remoteName : rmList)
+			{
+				std::cerr << "Deleting table entry because no heartbeat request for too long: "
+						  << remoteName << std::endl;
+				m_lookup.erase(remoteName);
+			}
+		}
+	}
+
 private:
 	ndn::Face& m_face;
 	ndn::KeyChain m_keyChain;
@@ -305,6 +337,7 @@ private:
 
 	// maps foreign hostname (remoteName) to a control block
 	std::map<std::string, MIDIControlBlock> m_lookup;
+	std::thread cbMonitor;
 
 public:
 	RtMidiOut *midiout;
