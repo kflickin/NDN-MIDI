@@ -8,3 +8,7 @@ build/
 
 # Mac Thing...
 .DS_Store
+
+# Executables
+ControllerMIDI
+PlaybackModuleMIDI
