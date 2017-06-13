@@ -1,1 +1,1 @@
-# midi-ndn
+# ndn-midi
