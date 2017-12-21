@@ -18,6 +18,10 @@
 
 using sysclock = std::chrono::system_clock;
 
+/*
+ MIDIMessage
+ contains a single MIDI message of 3 bytes
+**/
 struct MIDIMessage
 {
 	char data[3];
@@ -41,18 +45,28 @@ public:
 		m_face.setInterestFilter(m_baseName,
 								 std::bind(&Controller::onInterest, this, _2),
 								 std::bind(&Controller::onSuccess, this, _1),
+								 //ndn::RegisterPrefixSuccessCallback(),
 								 [] (const ndn::Name& prefix, const std::string& reason) {
 									std::cerr << "Failed to register prefix: " << reason << std::endl;
 								 });
 	}
 
 public:
+	/*
+	 addInput(MIDIMessage msg)
+	 Add a MIDIMessage to the input queue
+	*/
 	void
 	addInput(MIDIMessage msg)
 	{
 		m_inputQueue.push_back(msg);
 	}
 
+	/*
+	 addInput(std::string msg)
+	 Convert msg to a MIDIMessage
+	 Add the MIDIMessage to the input queue
+	*/
 	void
 	addInput(std::string msg)
 	{
@@ -84,20 +98,27 @@ public:
 	// 	addInput(midiMsg);
 	// }
 
+	/*
+	 replyInterest()
+	 If input and interest queues are not empty
+	 sends up to maxBufSize midi messages in a packet
+	*/
 	void
 	replyInterest()
 	{
-		// if not connected, queue will be cleared
+		// If not connected, queue will be cleared
 		if (!m_connGood)
 		{
 			m_inputQueue.clear();
 			m_interestQueue.clear();
 		}
 
+		// TODO: Verify this is right logic - what if no interests? Notes lost?
 		if (!m_inputQueue.empty() && !m_interestQueue.empty())
 		{
 			int midiBufSize = 0;
 			std::cout << "Sending Data: \n";
+			// Send up to to max number of notes in a packet
 			while (!m_inputQueue.empty() && midiBufSize < 10){
 				midiBuf[midiBufSize] = m_inputQueue.front();
 				m_inputQueue.pop_front();
@@ -106,12 +127,14 @@ public:
 			// debug
 			//std::cout << "Sending data: " << std::string(midiMsg.data, 3) << std::endl;
 				std::cout << "\t";
+				// Print three bytes of MIDI message
 				for (int i = 0; i < 3; ++i) {
 					std::cout << " " << (int)midiBuf[midiBufSize].data[i];
 				}
 				std::cout << "\n";
 				midiBufSize++;
 			}
+			// TODO: See if this is really how packets should be named - from logical and design standpoints
 			ndn::Name interestName = m_interestQueue.front();
 			m_interestQueue.pop_front();
 
@@ -121,6 +144,10 @@ public:
 	}
 
 private:
+	/*
+	 onSuccess(const ndn::Name& prefix)
+	 Creates thread to send heartbeat message
+	*/
 	void
 	onSuccess(const ndn::Name& prefix)
 	{
@@ -129,6 +156,10 @@ private:
 		heartbeatProbe = std::thread(&Controller::sendHeartbeat, this);
 	}
 
+	/*
+	 onInterest(const ndn::Interest& interest)
+	 Add interest to interest queue or drop interest
+	*/
 	void
 	onInterest(const ndn::Interest& interest)
 	{
@@ -163,6 +194,11 @@ private:
 		}
 	}
 
+	/*
+	 onData(const ndn::Data& data)
+	 Data should be heartbeat message or connection setup
+	
+	*/
 	void
 	onData(const ndn::Data& data)
 	{
@@ -196,7 +232,10 @@ private:
 		std::cout << "Data name: " << data.getName().toUri() << std::endl;
 	}
 
-	
+	/*
+	 onTimeout(const ndn::Interest& interest)
+	 TODO
+	**/
 	void
 	onTimeout(const ndn::Interest& interest)
 	{
@@ -207,20 +246,31 @@ private:
 		//						std::bind(&Controller::onTimeout, this, _1));
 	}
 	
+	void
+	onNetworkNack(const ndn::Interest& interest)
+	{
+
+	}
 
 private:
+	/*
+	 requestNext()
+	 Request heartbeat from playback module
+	*/
 	void
 	requestNext()
 	{
 		heartbeatNonce = rand();
+		// Express interest for heartbeat message
 		m_face.expressInterest(ndn::Interest(ndn::Name(
 											"/topo-prefix/" + m_remoteName + "/midi-ndn/" + m_projName
 											).append(m_devName + "/heartbeat"))
 								.setMustBeFresh(true)
 								.setInterestLifetime(ndn::time::seconds(HEAERTBEAT_PERIOD_S))
 								.setNonce(heartbeatNonce),
-								std::bind(&Controller::onData, this, _2));
-								//std::bind(&Controller::onTimeout, this, _1));
+								std::bind(&Controller::onData, this, _2),
+								std::bind(&Controller::onTimeout, this, _1),
+								std::bind(&Controller::onNetworkNack, this, _1));
 		// debug
 		std::cerr << "Sending out interest: " << m_baseName << std::endl;
 	}
@@ -241,16 +291,22 @@ private:
 		// sign data packet
 		m_keyChain.sign(*data);
 
+		// TODO: See if this should be putData
 		// make data packet available for fetching
 		m_face.put(*data);
 	}
 
+	/*
+	 sendHeartbeat()
+	 send interest for heartbeat message or reset connection
+	**/
 	void
 	sendHeartbeat()
 	{
 		while (true)
 		{
 			m_hbCount += 1;
+			// Send interest for heartbeat message
 			requestNext();
 			std::cerr << "HEARTBEAT: " << m_hbCount << std::endl;
 
@@ -295,11 +351,13 @@ void input_listener(Controller& controller)
 	while (true)
 	{
 		int input = std::cin.get();
+		// Why?
 		if (input > 0)
 		{
 			controller.addInput("");
 			break;
 		}
+		// TODO: Determine correct time length
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 	}
 }
@@ -415,7 +473,9 @@ int main(int argc, char *argv[])
 
      	std::cout << "\nReading MIDI input ... press <enter> to quit.\n";
 
+     	// Get MIDI input
 		std::thread midiThread(midiLoopNoBLock, controller.midiin, message, std::ref(controller));
+		//
 		std::thread outputThread(output_sender, std::ref(controller));
 
 		// start processing loop (it will block forever)
@@ -433,14 +493,14 @@ int main(int argc, char *argv[])
 bool chooseMidiPort( RtMidiIn *rtmidi )
 {
 
-  // std::cout << "\nWould you like to open a virtual input port? [y/N] ";
+   std::cout << "\nWould you like to open a virtual input port? [y/N] ";
 
   std::string keyHit;
-  // std::getline( std::cin, keyHit );
-  // if ( keyHit == "y" ) {
-  //   rtmidi->openVirtualPort();
-  //   return true;
-  // }
+  std::getline( std::cin, keyHit );
+  if ( keyHit == "y" ) {
+    rtmidi->openVirtualPort();
+    return true;
+  }
   
 
   std::string portName;

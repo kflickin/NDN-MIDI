@@ -256,6 +256,12 @@ private:
 		//						std::bind(&PlaybackModule::onData, this, _2),
 		//						std::bind(&PlaybackModule::onTimeout, this, _1));
 	}
+
+	void 
+	onNack(const ndn::Interest& interest)
+	{
+
+	}
 	
 
 private:
@@ -292,7 +298,7 @@ private:
 		nextNameInterest.setMustBeFresh(true);
 		m_face.expressInterest(nextNameInterest,
 								std::bind(&PlaybackModule::onData, this, _2),
-								//std::bind(&PlaybackModule::onNack, this, _1, _2),
+								std::bind(&PlaybackModule::onNack, this, _1),
 								std::bind(&PlaybackModule::onTimeout, this, _1));
 
 		m_lookup[remoteName].maxSeqNo++;
