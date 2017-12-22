@@ -1,3 +1,18 @@
+/********************************
+
+ControllerMIDI.cpp
+Requires NFD, ndn-cxx, RtMidi.cpp, and RtMidi.h to compile
+
+Receives MIDI messages from user designated port and sends them to PlaybackModuleMIDI
+
+Sends interest and receives data for connection setup and heartbeat messages
+Sends data for MIDI messages
+
+Currently compatible and tested on MacOS 10.13.2
+Currently untested but should work on Linux distros with minimal changes
+
+********************************/
+
 #include <ndn-cxx/face.hpp>
 #include <ndn-cxx/interest.hpp>
 #include <ndn-cxx/data.hpp>
@@ -13,15 +28,16 @@
 #include <stdlib.h>
 #include "RtMidi.h"
 
-#define HEAERTBEAT_PERIOD_S 1
+// Length in seconds between heartbeat probes
+#define HEARTBEAT_PERIOD_S 1
+
+// Maximum number of probes for reconnection
 #define MAX_HEARTBEAT_PROBE 3
 
 using sysclock = std::chrono::system_clock;
 
-/*
- MIDIMessage
- contains a single MIDI message of 3 bytes
-**/
+
+// Container for a single MIDI message of 3 bytes
 struct MIDIMessage
 {
 	char data[3];
@@ -45,28 +61,21 @@ public:
 		m_face.setInterestFilter(m_baseName,
 								 std::bind(&Controller::onInterest, this, _2),
 								 std::bind(&Controller::onSuccess, this, _1),
-								 //ndn::RegisterPrefixSuccessCallback(),
 								 [] (const ndn::Name& prefix, const std::string& reason) {
 									std::cerr << "Failed to register prefix: " << reason << std::endl;
 								 });
 	}
 
 public:
-	/*
-	 addInput(MIDIMessage msg)
-	 Add a MIDIMessage to the input queue
-	*/
+	// Add a MIDIMessage to the input queue
 	void
 	addInput(MIDIMessage msg)
 	{
 		m_inputQueue.push_back(msg);
 	}
 
-	/*
-	 addInput(std::string msg)
-	 Convert msg to a MIDIMessage
-	 Add the MIDIMessage to the input queue
-	*/
+	// Convert msg to a MIDIMessage
+	// Add the MIDIMessage to the input queue
 	void
 	addInput(std::string msg)
 	{
@@ -81,8 +90,8 @@ public:
 		addInput(midiMsg);
 	}
 
+	// TODO: Remove if unnecessary 
 	// Added for MIDI message vector
-
 	// void
 	// addInput(std::vector< unsigned char > msg)
 	// {
@@ -98,11 +107,9 @@ public:
 	// 	addInput(midiMsg);
 	// }
 
-	/*
-	 replyInterest()
-	 If input and interest queues are not empty
-	 sends up to maxBufSize midi messages in a packet
-	*/
+	
+	// If input and interest queues are not empty
+	// sends up to maxBufSize midi messages in a packet
 	void
 	replyInterest()
 	{
@@ -122,10 +129,6 @@ public:
 			while (!m_inputQueue.empty() && midiBufSize < 10){
 				midiBuf[midiBufSize] = m_inputQueue.front();
 				m_inputQueue.pop_front();
-
-			
-			// debug
-			//std::cout << "Sending data: " << std::string(midiMsg.data, 3) << std::endl;
 				std::cout << "\t";
 				// Print three bytes of MIDI message
 				for (int i = 0; i < 3; ++i) {
@@ -144,10 +147,7 @@ public:
 	}
 
 private:
-	/*
-	 onSuccess(const ndn::Name& prefix)
-	 Creates thread to send heartbeat message
-	*/
+	// Creates thread to send heartbeat message
 	void
 	onSuccess(const ndn::Name& prefix)
 	{
@@ -156,10 +156,7 @@ private:
 		heartbeatProbe = std::thread(&Controller::sendHeartbeat, this);
 	}
 
-	/*
-	 onInterest(const ndn::Interest& interest)
-	 Add interest to interest queue or drop interest
-	*/
+	// Add interest to interest queue or drop interest
 	void
 	onInterest(const ndn::Interest& interest)
 	{
@@ -180,7 +177,7 @@ private:
 					  << std::endl;
 		}
 
-		// consider out-of-order or retransmitted interest
+		// Consider out-of-order or retransmitted interest
 		int seqNo = interest.getName().get(-1).toSequenceNumber();
 		//if (seqNo == m_maxSeqNo)	// strict order
 		if (seqNo >= m_maxSeqNo)
@@ -194,14 +191,11 @@ private:
 		}
 	}
 
-	/*
-	 onData(const ndn::Data& data)
-	 Data should be heartbeat message or connection setup
-	
-	*/
+	// Data should be heartbeat message or connection setup
 	void
 	onData(const ndn::Data& data)
 	{
+		// Exit if not a heartbeat message
 		if (data.getName().get(-1).toUri() != "heartbeat")
 		{
 			//std::cerr << ":P" << std::endl;
@@ -223,7 +217,6 @@ private:
 		m_interestQueue.clear();
 		m_maxSeqNo = 0;	// reset seqNo tracking
 
-		// debug
 		std::cout << "Received data: "
 				  << std::string(reinterpret_cast<const char*>(data.getContent().value()),
 															   data.getContent().value_size())
@@ -232,10 +225,7 @@ private:
 		std::cout << "Data name: " << data.getName().toUri() << std::endl;
 	}
 
-	/*
-	 onTimeout(const ndn::Interest& interest)
-	 TODO
-	**/
+	// TODO: Implement at least a message
 	void
 	onTimeout(const ndn::Interest& interest)
 	{
@@ -246,6 +236,7 @@ private:
 		//						std::bind(&Controller::onTimeout, this, _1));
 	}
 	
+	// TODO: Implement at least a message
 	void
 	onNetworkNack(const ndn::Interest& interest)
 	{
@@ -253,10 +244,7 @@ private:
 	}
 
 private:
-	/*
-	 requestNext()
-	 Request heartbeat from playback module
-	*/
+	// Request heartbeat from playback module
 	void
 	requestNext()
 	{
@@ -266,40 +254,36 @@ private:
 											"/topo-prefix/" + m_remoteName + "/midi-ndn/" + m_projName
 											).append(m_devName + "/heartbeat"))
 								.setMustBeFresh(true)
-								.setInterestLifetime(ndn::time::seconds(HEAERTBEAT_PERIOD_S))
+								.setInterestLifetime(ndn::time::seconds(HEARTBEAT_PERIOD_S))
 								.setNonce(heartbeatNonce),
 								std::bind(&Controller::onData, this, _2),
 								std::bind(&Controller::onTimeout, this, _1),
 								std::bind(&Controller::onNetworkNack, this, _1));
-		// debug
+		
 		std::cerr << "Sending out interest: " << m_baseName << std::endl;
 	}
 
-	// respond interest with data
+	// Respond to interest with data
 	void
 	sendData(const ndn::Name& dataName, const char *buf, size_t size)
 	{
-		// create data packet with the same name as interest
+		// Create data packet with the same name as interest
 		std::shared_ptr<ndn::Data> data = std::make_shared<ndn::Data>(dataName);
 
-		// prepare and assign content of the data packet
+		// Prepare and assign content of the data packet
 		data->setContent(reinterpret_cast<const uint8_t*>(buf), size);
 
-		// set metainfo parameters
+		// Set metainfo parameters
 		data->setFreshnessPeriod(ndn::time::seconds(1));
 
-		// sign data packet
+		// Sign data packet
 		m_keyChain.sign(*data);
 
-		// TODO: See if this should be putData
-		// make data packet available for fetching
+		// Make data packet available for fetching
 		m_face.put(*data);
 	}
 
-	/*
-	 sendHeartbeat()
-	 send interest for heartbeat message or reset connection
-	**/
+	// Send interest for heartbeat message or reset connection
 	void
 	sendHeartbeat()
 	{
@@ -316,7 +300,7 @@ private:
 				m_connGood = false;
 			}
 
-			std::this_thread::sleep_for(std::chrono::seconds(HEAERTBEAT_PERIOD_S));
+			std::this_thread::sleep_for(std::chrono::seconds(HEARTBEAT_PERIOD_S));
 		}
 	}
 
@@ -345,13 +329,12 @@ public:
 	RtMidiIn *midiin;
 };
 
-// now basically what midiLoopNoBLock() is doing
+// now basically what midiLoopNoBlock() is doing
 void input_listener(Controller& controller)
 {
 	while (true)
 	{
 		int input = std::cin.get();
-		// Why?
 		if (input > 0)
 		{
 			controller.addInput("");
@@ -398,14 +381,13 @@ void bytecallback( double deltatime, std::vector< unsigned char > *message, void
 // an exception.  It offers the user a choice of MIDI ports to open.
 // It returns false if there are no ports available.
 bool chooseMidiPort( RtMidiIn *rtmidi );
-// End of RtMidi functions
 
 //Used in thread to get incoming midi messages
 void midiLoop(char input){
 	std::cin.get(input);
 }
 
-void midiLoopNoBLock(RtMidiIn *midiin, std::vector<unsigned char> message, Controller& controller){
+void midiLoopNoBlock(RtMidiIn *midiin, std::vector<unsigned char> message, Controller& controller){
 	bool done = false;
 	double stamp;
 	int nBytes;
@@ -432,16 +414,14 @@ void midiLoopNoBLock(RtMidiIn *midiin, std::vector<unsigned char> message, Contr
 
 int main(int argc, char *argv[])
 {
-	/*** argument parsing ***/
-
 	std::string remoteName;
 	std::string devName;
 	std::string projName = "tmp-proj";
-	//RtMidiIn *midiin = 0; //KELLY
-	std::vector<unsigned char> message; //KELLY
+	std::vector<unsigned char> message; 
 	
 	if (argc > 2)
 	{
+		// TODO: check formatting
 		remoteName = argv[1];
 		devName = argv[2];
 	}
@@ -453,18 +433,22 @@ int main(int argc, char *argv[])
 
 	if (argc > 3)
 	{
+		// TODO: Check formatting
 		projName = argv[3];
 	}
 
 
 	try {
-		// create Face instance
+		// Create Face instance
 		ndn::Face face;
 
-		// create server instance
+		// Create server instance
 		Controller controller(face, remoteName, devName, projName);
 
+		// Create RTMidiIn instance
 		controller.midiin = new RtMidiIn();
+
+		// Choose MIDI port or create virtual port
 		if ( chooseMidiPort( controller.midiin ) == false ) goto cleanup;
 	 	//controller.midiin->setCallback( &mycallback );
 
@@ -474,11 +458,12 @@ int main(int argc, char *argv[])
      	std::cout << "\nReading MIDI input ... press <enter> to quit.\n";
 
      	// Get MIDI input
-		std::thread midiThread(midiLoopNoBLock, controller.midiin, message, std::ref(controller));
-		//
+		std::thread midiThread(midiLoopNoBlock, controller.midiin, message, std::ref(controller));
+		
+		// Create thread with call to replyInterest()
 		std::thread outputThread(output_sender, std::ref(controller));
 
-		// start processing loop (it will block forever)
+		// Start processing loop (it will block forever)
 		face.processEvents();
 	}
 	catch (const std::exception& e) {
