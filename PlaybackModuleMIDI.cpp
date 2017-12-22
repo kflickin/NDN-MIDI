@@ -1,18 +1,16 @@
 /********************************
 
-Plays back MIDI message received
-Acts as a producer and consumer at the same time.
+PlaybackModuleMIDI.cpp
+Requires NFD, ndn-cxx, RtMidi.cpp, and RtMidi.h to compile
 
-This part is a.k.a. "NDN Module"
+Receives and plays back MIDI messages received from ControllerMIDI
+on user designated MIDI port.
 
-Note:
-For received interest packet:
-					-3		-2 		-1
-(topology-prefix)/<user>/midi-ndn/<proj_name>
-if we add in device then it's -4
+Receives interest and sends data for connection setup and heartbeat messages
+Sends interest for MIDI messages
 
-For received data packet / sent interest packet:
-user position = user position in received interest - 1 = -4
+Currently compatible and tested on MacOS 10.13.2
+Currently untested but should work on Linux distros with minimal changes
 
 ********************************/
 
@@ -32,7 +30,7 @@ user position = user position in received interest - 1 = -4
 
 #include "RtMidi.h"
 
-// Platform-dependent sleep routines.
+// Define platform-dependent sleep routines.
 #if defined(__WINDOWS_MM__)
   #include <windows.h>
   #define SLEEP( milliseconds ) Sleep( (DWORD) milliseconds ) 
@@ -41,9 +39,13 @@ user position = user position in received interest - 1 = -4
   #define SLEEP( milliseconds ) usleep( (unsigned long) (milliseconds * 1000.0) )
 #endif
 
+// Define number of interests sent once connection is made with ControllerMIDI
 #define PREWARM_AMOUNT 5
+
+// Define maximum time for connection with ControllerMIDI to be inactive 
 #define MAX_INACTIVE_TIME 5
 
+// MIDI message information for a single connection
 struct MIDIControlBlock
 {
 	int minSeqNo;
@@ -59,6 +61,7 @@ public:
 		, m_baseName(ndn::Name("/topo-prefix/" + hostname + "/midi-ndn/" + projname))
 		, m_projName(projname)
 	{
+		// Set interest filter for connection setup
 		m_face.setInterestFilter(m_baseName,
 								 std::bind(&PlaybackModule::onInterest, this, _2),
 								 std::bind([] {
@@ -67,22 +70,29 @@ public:
 								 [] (const ndn::Name& prefix, const std::string& reason) {
 									std::cerr << "Failed to register prefix: " << reason << std::endl;
 								 });
+
+		// Thread to check for and remove stale connections
 		cbMonitor = std::thread(&PlaybackModule::controlBlockMonitoring, this);
 	}
 
 private:
+
+		
+	// Respond to interest as heartbeat message or connection setup	
 	void
 	onInterest(const ndn::Interest& interest)
 	{
+		// Check if interest is for heartbeat/connection setup or throw away
 		if (interest.getName().get(-1).toUri() != "heartbeat")
 			return;
 
-		/*** check if connection already exist ***/
+		// Check if connection already exist
 		bool isHeartbeat = false;
 
-		// placeholder: maybe device name in the future
+		// Get name of remote sending device
 		std::string remoteName = interest.getName().get(-2).toUri();
 
+		// Check if connection already exists
 		if (m_lookup.count(remoteName) > 0)
 		{
 			std::cerr << "Received heartbeat message: " << interest << std::endl;
@@ -90,38 +100,35 @@ private:
 			m_lookup[remoteName].inactiveTime = 0;
 		}
 
-		/*** accept new connection ***/
-
+		// Accept and create new connection
 		if (!isHeartbeat)
 		{
 			m_lookup[remoteName] = {0,0};
 			std::cerr << "Connection accepted: " << interest << std::endl;
 		}
 
-		/*** respond to connection request ***/
+		/*** Respond to connection request ***/
 
-		// create data packet with the same name as interest
+		// Create data packet with the same name as the interest packet
 		std::shared_ptr<ndn::Data> data = std::make_shared<ndn::Data>(interest.getName());
 
-		// prepare and assign content of the data packet
+		// Prepare and assign content of the data packet
 		std::string content = "ACCEPTED";
 		data->setContent(reinterpret_cast<const uint8_t*>(content.c_str()), content.size());
 
-		// set metainfo parameters
+		// Set metainfo parameters
 		data->setFreshnessPeriod(ndn::time::seconds(1)); 
 
-		// sign data packet
+		// Sign data packet
 		m_keyChain.sign(*data);
 
-		// make data packet available for fetching
+		// Make data packet available for fetching
 		m_face.put(*data);
-
-		/*** start sending out interest for next seq ***/
 
 		if (!isHeartbeat)
 		{
 			SLEEP(10);
-			// prewarm the channel with some interests
+			// "Prewarm the channel" with some interest packets to avoid initial playback latency
 			for (int i = 0; i < PREWARM_AMOUNT; ++i)
 			{
 				requestNext(remoteName);
@@ -132,14 +139,17 @@ private:
 	void
 	onData(const ndn::Data& data)
 	{
+		// Exit is data packet is a heartbeat message
 		if (data.getName().get(-1).toUri() == "heartbeat")
 			return;
 
+		// Get sequence number of data packet
 		int seqNo = data.getName().get(-1).toSequenceNumber();
-		// placeholder: maybe device name in the future?
+
+		// Set name of remote MIDI controller from data packet
 		std::string remoteName = data.getName().get(-4).toUri();
 
-		// CHECKPOINT 1: connection actually exist
+		// Verify connection exists
 		if (m_lookup.count(remoteName) == 0)
 		{
 			// the connection doesn't exist!!
@@ -149,7 +159,7 @@ private:
 			return;
 		}
 
-		// CHECKPOINT 2: sequence number agrees
+		// TODO: CHECKPOINT 2: sequence number agrees
 		// Now: done later
 		//if (m_lookup[remoteName].minSeqNo >= m_lookup[remoteName].maxSeqNo)
 		//{
@@ -166,7 +176,7 @@ private:
 		//			  << std::endl;
 		//}
 
-		// CHECKPOINT 3: data is in correct format
+		// TODO: Verify data is in correct format
 		char buffer[30];
 		int dataSize = data.getContent().value_size();
 		// if (data.getContent().value_size() != 3)
@@ -179,13 +189,13 @@ private:
 		// 			  << std::endl;
 		// }
 
-		/**
-		 * Starting here all check points are passed
-		 * copy data and increment sequence number
-		 */
+		// Copy data to buffer and increment sequence number
 		memcpy(buffer, data.getContent().value(), dataSize);
 		
+		// Get connection information
 		MIDIControlBlock cb = m_lookup[remoteName];
+
+		// Check for valid sequence number
 		if (cb.minSeqNo > seqNo)
 		{
 			// out-of-date data, drop
@@ -201,12 +211,11 @@ private:
 			return;
 		}
 
-		// currently no waiting time for more packets to be received
+		// Adjust sequence number window
 		int diff = seqNo - cb.minSeqNo + 1;
 		m_lookup[remoteName].minSeqNo += diff;
 
-		// debug
-		
+		// Create MIDI message for playback from data packet
 		std::cout << "Received data: \n\t";
 		for (int j = 0; j < dataSize/3; ++j){
 		for (int i = 0; i < 3; ++i)
@@ -218,13 +227,13 @@ private:
 		}
 		std::cout << "\n\t";
 
-
-		// Playback of midi
+		// Playback of MIDI message
 		if (this->message.size()==3){
 			this->midiout->sendMessage(&this->message);
 		}
 
-		// currently using a special message to shutdown... 
+		// Special MIDI message for shutdown
+		// TODO: Implement a way to send this message 
 		if (buffer[0] == 0 && buffer[1] == 0 && buffer[2] == 0)
 		{
 			std::cerr << "Deleting table entry of: " << remoteName << std::endl;
@@ -232,14 +241,13 @@ private:
 			return;
 		}
 	}
-		//std::cout << std::endl;
+		
+		// Print sequence range
 		std::cout << "\t[seq range = (" << m_lookup[remoteName].minSeqNo
 			<< "," << m_lookup[remoteName].maxSeqNo << ")]" << std::endl;
 
-		/**
-		 * TODO: process data
-		 */
 		
+		// Request next data packets based on window size
 		for (int i = 0; i < diff; ++i)
 		{
 			requestNext(remoteName);
@@ -257,10 +265,12 @@ private:
 		//						std::bind(&PlaybackModule::onTimeout, this, _1));
 	}
 
+	// TODO: Implement this if deemed necessary
+	// Possibly just a message
 	void 
 	onNack(const ndn::Interest& interest)
 	{
-
+		std::cerr << "Nack received for: " << interest << std::endl;
 	}
 	
 
@@ -268,10 +278,9 @@ private:
 	void
 	requestNext(std::string remoteName)
 	{
+		// Check if connection exists
 		if (m_lookup.count(remoteName) == 0)
 		{
-			// weird, maybe connection is closed or something
-			// or people trying to be malicious (LOL)
 			std::cerr << "Attempted to request from non-existent remote: "
 					  << remoteName
 					  << " - DROPPED"
@@ -281,7 +290,7 @@ private:
 
 		int nextSeqNo = m_lookup[remoteName].maxSeqNo;
 		
-
+		// TODO: Determine if below should be removed
 		/** Send interest without specifying interest lifetime 
 
 		ndn::Name nextName = ndn::Name(m_baseName).appendSequenceNumber(nextSeqNo);
@@ -290,7 +299,7 @@ private:
 								std::bind(&PlaybackModule::onTimeout, this, _1));
 		**/
 
-		// Send interest with long interest lifetime
+		// Create and send next interest with long interest lifetime
 		ndn::Name nextName = ndn::Name("/topo-prefix/" + remoteName + "/midi-ndn/" + m_projName)
 				.appendSequenceNumber(nextSeqNo);
 		ndn::Interest nextNameInterest = ndn::Interest(nextName);
@@ -301,14 +310,13 @@ private:
 								std::bind(&PlaybackModule::onNack, this, _1),
 								std::bind(&PlaybackModule::onTimeout, this, _1));
 
+		// Increment max sequence number 
 		m_lookup[remoteName].maxSeqNo++;
 
-		// debug
 		std::cerr << "Sending out interest: " << nextName << std::endl;
 	}
 
-	// update all control blocks every second
-	// and remove block if not hearing from it for too long
+	// Check and update/remove all control blocks every second
 	void
 	controlBlockMonitoring()
 	{
@@ -327,7 +335,7 @@ private:
 
 			for (std::string& remoteName : rmList)
 			{
-				std::cerr << "Deleting table entry because no heartbeat request for too long: "
+				std::cerr << "Deleting table entry because no heartbeat request received for too long: "
 						  << remoteName << std::endl;
 				m_lookup.erase(remoteName);
 			}
@@ -338,11 +346,12 @@ private:
 	ndn::Face& m_face;
 	ndn::KeyChain m_keyChain;
 	ndn::Name m_baseName;
-
 	std::string m_projName;
 
-	// maps foreign hostname (remoteName) to a control block
+	// Maps remote hostname (remoteName) to a control block
 	std::map<std::string, MIDIControlBlock> m_lookup;
+
+	// Thread to monitor control blocks and add/remove as necessary
 	std::thread cbMonitor;
 
 public:
@@ -360,45 +369,48 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	// get unique user name
-	//char namebuf[64];
-	//gethostname(namebuf, 64);
+	// TODO: Add check for hostname format
 	std::string hostname = argv[1];
 
 	// get project name: default is tmp-proj
 	std::string projname = "tmp-proj";
 	if (argc > 2)
 	{
+		// TODO: Add check for projname format
 		projname = argv[2];
 	}
 
 	try {
-		// create Face instance
+		// Create Face instance
 		ndn::Face face;
 
-		// create server instance
+		// Create server instance
 		PlaybackModule ndnModule(face, hostname, projname);
 		
 		// RtMidiOut setup
 		ndnModule.midiout = new RtMidiOut();
 		chooseMidiPort( ndnModule.midiout );
 
+		// TODO: Remove if unnecessary
 		ndnModule.message.push_back( 192 );
     	ndnModule.message.push_back( 5 );
     	ndnModule.midiout->sendMessage( &ndnModule.message );
 
 		SLEEP( 500 );
 
+		// TODO: Remove if unnecessary
   		ndnModule.message[0] = 0xF1;
   		ndnModule.message[1] = 60;
   		ndnModule.midiout->sendMessage( &ndnModule.message );
 
+  		// TODO: Remove if unnecessary
   		// Control Change: 176, 7, 100 (volume)
   		ndnModule.message[0] = 176;
   		ndnModule.message[1] = 7;
   		ndnModule.message.push_back( 100 );
   		ndnModule.midiout->sendMessage( &ndnModule.message );
 
+  		// TODO: Remove if unnecessary
   		// Note On: 144, 64, 90
   		ndnModule.message[0] = 144;
   		ndnModule.message[1] = 64;
@@ -407,6 +419,7 @@ int main(int argc, char *argv[])
 
   		SLEEP( 500 );
 
+		// TODO: Remove if unnecessary
   		// Note Off: 128, 64, 40
   		ndnModule.message[0] = 144;
   		ndnModule.message[1] = 64;
@@ -415,16 +428,7 @@ int main(int argc, char *argv[])
 
   		SLEEP( 500 );
 
-  		// // Note Off: 128, 64, 40
-  		// ndnModule.message[0] = 128;
-  		// ndnModule.message[1] = 64;
-  		// ndnModule.message[2] = 40;
-  		// ndnModule.midiout->sendMessage( &ndnModule.message );
-
-  		// SLEEP( 500 );
-
-
-		// start processing loop (it will block forever)
+		// Start processing loop (it will block forever)
 		face.processEvents();
 	}
 	catch (const std::exception& e) {
