@@ -45,13 +45,18 @@ Currently untested but should work on Linux distros with minimal changes
 // Define maximum time for connection with ControllerMIDI to be inactive 
 #define MAX_INACTIVE_TIME 5
 
+// Define maximum number of MIDI channels
+#define MAX_CHANNELS 16
+
 // MIDI message information for a single connection
 struct MIDIControlBlock
 {
 	int minSeqNo;
 	int maxSeqNo;
 	int inactiveTime;
+	int channel;
 };
+
 
 class PlaybackModule
 {
@@ -88,6 +93,8 @@ private:
 
 		// Check if connection already exist
 		bool isHeartbeat = false;
+		bool connectionSuccess = true;
+		std::string content = "ACCEPTED";
 
 		// Get name of remote sending device
 		std::string remoteName = interest.getName().get(-2).toUri();
@@ -103,8 +110,31 @@ private:
 		// Accept and create new connection
 		if (!isHeartbeat)
 		{
-			m_lookup[remoteName] = {0,0};
-			std::cerr << "Connection accepted: " << interest << std::endl;
+			int controllerChannel = MAX_CHANNELS;
+			// Set channel to first available channel
+			for (int i = 0; i < MAX_CHANNELS; i++) 
+			{
+				if (channelList[i] == "") {
+					controllerChannel = i;
+					channelList[i] = remoteName;
+					break;
+				}
+			}
+
+			// Return error if no availble channels
+			if (controllerChannel == MAX_CHANNELS) {
+				// TODO: error
+				std::cerr << "Connection denied: No available MIDI channels." << std::endl;
+				connectionSuccess = false;
+				content = "DENIED";
+			}
+		
+			// Create MIDI control block for new connection
+			if (connectionSuccess) 
+			{
+				m_lookup[remoteName] = {0,0,0,controllerChannel};
+				std::cerr << "Connection accepted: " << interest << std::endl;
+			}
 		}
 
 		/*** Respond to connection request ***/
@@ -113,7 +143,6 @@ private:
 		std::shared_ptr<ndn::Data> data = std::make_shared<ndn::Data>(interest.getName());
 
 		// Prepare and assign content of the data packet
-		std::string content = "ACCEPTED";
 		data->setContent(reinterpret_cast<const uint8_t*>(content.c_str()), content.size());
 
 		// Set metainfo parameters
@@ -218,13 +247,17 @@ private:
 		// Create MIDI message for playback from data packet
 		std::cout << "Received data: \n\t";
 		for (int j = 0; j < dataSize/3; ++j){
-		for (int i = 0; i < 3; ++i)
+			std::cout << " " << (int)buffer[(j*3)];
+			// for midi message
+			this->message[0] = ((unsigned char)buffer[(j*3)] & 0b11110000) | cb.channel;
+		for (int i = 1; i < 3; ++i)
 		{
 			std::cout << " " << (int)buffer[i+(j*3)];
 			// for midi message
 			this->message[i] = (unsigned char)buffer[i+(j*3)];
 
 		}
+		std::cout << " Channel: " << cb.channel;
 		std::cout << "\n\t";
 
 		// Playback of MIDI message
@@ -237,6 +270,7 @@ private:
 		if (buffer[0] == 0 && buffer[1] == 0 && buffer[2] == 0)
 		{
 			std::cerr << "Deleting table entry of: " << remoteName << std::endl;
+			channelList[cb.channel] = "";
 			m_lookup.erase(remoteName);
 			return;
 		}
@@ -337,6 +371,7 @@ private:
 			{
 				std::cerr << "Deleting table entry because no heartbeat request received for too long: "
 						  << remoteName << std::endl;
+				channelList[m_lookup[remoteName].channel] = "";
 				m_lookup.erase(remoteName);
 			}
 		}
@@ -353,6 +388,9 @@ private:
 
 	// Thread to monitor control blocks and add/remove as necessary
 	std::thread cbMonitor;
+
+	// List of MIDI channels
+	std::string channelList[16] = {};
 
 public:
 	RtMidiOut *midiout;
@@ -391,40 +429,40 @@ int main(int argc, char *argv[])
 		ndnModule.midiout = new RtMidiOut();
 		chooseMidiPort( ndnModule.midiout );
 
-		// TODO: Remove if unnecessary
+		// // TODO: Remove if unnecessary
 		ndnModule.message.push_back( 192 );
     	ndnModule.message.push_back( 5 );
     	ndnModule.midiout->sendMessage( &ndnModule.message );
 
 		SLEEP( 500 );
 
-		// TODO: Remove if unnecessary
-  		ndnModule.message[0] = 0xF1;
-  		ndnModule.message[1] = 60;
-  		ndnModule.midiout->sendMessage( &ndnModule.message );
+		// // // TODO: Remove if unnecessary
+  // 		ndnModule.message[0] = 0xF1;
+  // 		ndnModule.message[1] = 60;
+  // 		ndnModule.midiout->sendMessage( &ndnModule.message );
 
-  		// TODO: Remove if unnecessary
-  		// Control Change: 176, 7, 100 (volume)
+  // 		// TODO: Remove if unnecessary
+  // 		// Control Change: 176, 7, 100 (volume)
   		ndnModule.message[0] = 176;
   		ndnModule.message[1] = 7;
   		ndnModule.message.push_back( 100 );
   		ndnModule.midiout->sendMessage( &ndnModule.message );
 
-  		// TODO: Remove if unnecessary
-  		// Note On: 144, 64, 90
-  		ndnModule.message[0] = 144;
-  		ndnModule.message[1] = 64;
-  		ndnModule.message[2] = 90;
-  		ndnModule.midiout->sendMessage( &ndnModule.message );
+  // 		// TODO: Remove if unnecessary
+  // 		// Note On: 144, 64, 90
+  // 		ndnModule.message[0] = 144;
+  // 		ndnModule.message[1] = 64;
+  // 		ndnModule.message[2] = 90;
+  // 		ndnModule.midiout->sendMessage( &ndnModule.message );
 
-  		SLEEP( 500 );
+  // 		SLEEP( 500 );
 
-		// TODO: Remove if unnecessary
-  		// Note Off: 128, 64, 40
-  		ndnModule.message[0] = 144;
-  		ndnModule.message[1] = 64;
-  		ndnModule.message[2] = 0;
-  		ndnModule.midiout->sendMessage( &ndnModule.message );
+		// // TODO: Remove if unnecessary
+  // 		// Note Off: 128, 64, 40
+  // 		ndnModule.message[0] = 144;
+  // 		ndnModule.message[1] = 64;
+  // 		ndnModule.message[2] = 0;
+  // 		ndnModule.midiout->sendMessage( &ndnModule.message );
 
   		SLEEP( 500 );
 
