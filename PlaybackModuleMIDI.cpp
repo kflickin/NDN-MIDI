@@ -71,6 +71,7 @@ public:
 								 std::bind(&PlaybackModule::onInterest, this, _2),
 								 std::bind([] {
 									std::cerr << "Prefix registered" << std::endl;
+
 								 }),
 								 [] (const ndn::Name& prefix, const std::string& reason) {
 									std::cerr << "Failed to register prefix: " << reason << std::endl;
@@ -78,6 +79,50 @@ public:
 
 		// Thread to check for and remove stale connections
 		cbMonitor = std::thread(&PlaybackModule::controlBlockMonitoring, this);
+
+		setupComplete = true;
+
+	}
+
+	bool
+	getSetupComplete()
+	{
+		return setupComplete;
+	}
+
+	bool
+	getViewingMenu()
+	{
+		return viewingMenu;
+	}
+
+	void
+	setViewingMenu()
+	{
+		viewingMenu = true;
+	}
+
+	void
+	printConnections()
+	{
+		bool noConnections = true;
+		for (int i = 0; i < MAX_CHANNELS; i++)
+		{
+			if (channelList[i] != "")
+			{
+				std::cout << std::endl
+					<< "Channel "
+					<< i
+					<< ": "
+					<< channelList[i]
+					<< std::endl
+				;
+				noConnections = false;
+			}
+		}
+		if (noConnections) {
+			std::cout << "No connections\n";
+		}
 	}
 
 private:
@@ -102,7 +147,7 @@ private:
 		// Check if connection already exists
 		if (m_lookup.count(remoteName) > 0)
 		{
-			std::cerr << "Received heartbeat message: " << interest << std::endl;
+			//std::cerr << "Received heartbeat message: " << interest << std::endl;
 			isHeartbeat = true;
 			m_lookup[remoteName].inactiveTime = 0;
 		}
@@ -123,7 +168,6 @@ private:
 
 			// Return error if no availble channels
 			if (controllerChannel == MAX_CHANNELS) {
-				// TODO: error
 				std::cerr << "Connection denied: No available MIDI channels." << std::endl;
 				connectionSuccess = false;
 				content = "DENIED";
@@ -245,42 +289,41 @@ private:
 		m_lookup[remoteName].minSeqNo += diff;
 
 		// Create MIDI message for playback from data packet
-		std::cout << "Received data: \n\t";
+		std::cout << "Received data:";
 		for (int j = 0; j < dataSize/3; ++j){
-			std::cout << " " << (int)buffer[(j*3)];
-			// for midi message
-			this->message[0] = ((unsigned char)buffer[(j*3)] & 0b11110000) | cb.channel;
-		for (int i = 1; i < 3; ++i)
-		{
-			std::cout << " " << (int)buffer[i+(j*3)];
-			// for midi message
-			this->message[i] = (unsigned char)buffer[i+(j*3)];
+				std::cout << " [" << (int)buffer[(j*3)];
+				// for midi message
+				this->message[0] = ((unsigned char)buffer[(j*3)] & 0b11110000) | cb.channel;
+			for (int i = 1; i < 3; ++i)
+			{
+				std::cout << " " << (int)buffer[i+(j*3)];
+				// for midi message
+				this->message[i] = (unsigned char)buffer[i+(j*3)];
 
-		}
-		std::cout << " Channel: " << cb.channel;
-		std::cout << "\n\t";
+			}
+			std::cout << " Channel: " << cb.channel << "]";
+			//std::cout << "\n\t";
 
-		// Playback of MIDI message
-		if (this->message.size()==3){
-			this->midiout->sendMessage(&this->message);
-		}
+			// Playback of MIDI message
+			if (this->message.size()==3){
+				this->midiout->sendMessage(&this->message);
+			}
 
-		// Special MIDI message for shutdown
-		// TODO: Implement a way to send this message 
-		if (buffer[0] == 0 && buffer[1] == 0 && buffer[2] == 0)
-		{
-			std::cerr << "Deleting table entry of: " << remoteName << std::endl;
-			channelList[cb.channel] = "";
-			m_lookup.erase(remoteName);
-			return;
+			// Special MIDI message for shutdown
+			// TODO: Implement a way to send this message 
+			if (buffer[0] == 0 && buffer[1] == 0 && buffer[2] == 0)
+			{
+				std::cerr << "Deleting table entry of: " << remoteName << std::endl;
+				channelList[cb.channel] = "";
+				m_lookup.erase(remoteName);
+				return;
+			}
 		}
-	}
 		
 		// Print sequence range
 		std::cout << "\t[seq range = (" << m_lookup[remoteName].minSeqNo
 			<< "," << m_lookup[remoteName].maxSeqNo << ")]" << std::endl;
 
-		
 		// Request next data packets based on window size
 		for (int i = 0; i < diff; ++i)
 		{
@@ -347,7 +390,7 @@ private:
 		// Increment max sequence number 
 		m_lookup[remoteName].maxSeqNo++;
 
-		std::cerr << "Sending out interest: " << nextName << std::endl;
+		//std::cerr << "Sending out interest: " << nextName << std::endl;
 	}
 
 	// Check and update/remove all control blocks every second
@@ -392,10 +435,48 @@ private:
 	// List of MIDI channels
 	std::string channelList[16] = {};
 
+	bool setupComplete = false;
+
+	bool viewingMenu = false;
+
 public:
 	RtMidiOut *midiout;
 	std::vector<unsigned char> message;
 };
+
+
+
+void
+printMenu()
+{
+	std::cout 
+		<< "| ------ Main Menu ------ |\n"
+		<< "|                         |\n"
+		<< "|View Connections: 0      |\n"
+		<< "|                         |\n"
+		<< "|-------------------------|\n"
+		<< std::endl
+		<< "Please select and options: ";
+}
+
+void
+menuListener(PlaybackModule& playbackModule)
+{
+	while(playbackModule.getSetupComplete()) {
+		std::string listener = "";
+		getline (std::cin, listener);
+		if (listener == "menu") {
+			playbackModule.setViewingMenu();
+			printMenu();
+			getline (std::cin, listener);
+			if (listener == "0") {
+				std::cout << "Connections\n";
+				playbackModule.printConnections();
+			}
+		}
+	}
+	return;
+}
 
 bool chooseMidiPort( RtMidiOut *rtmidi );
 
@@ -466,6 +547,8 @@ int main(int argc, char *argv[])
 
   		SLEEP( 500 );
 
+  		std::thread menuThread(menuListener, std::ref(ndnModule));
+
 		// Start processing loop (it will block forever)
 		face.processEvents();
 	}
@@ -492,7 +575,6 @@ bool chooseMidiPort( RtMidiOut *rtmidi )
     return true;
   }
  
-
   std::string portName;
   unsigned int i = 0, nPorts = rtmidi->getPortCount();
   if ( nPorts == 0 ) {

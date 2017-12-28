@@ -29,7 +29,7 @@ Currently untested but should work on Linux distros with minimal changes
 #include "RtMidi.h"
 
 // Length in seconds between heartbeat probes
-#define HEARTBEAT_PERIOD_S 1
+#define HEARTBEAT_PERIOD_S 5
 
 // Maximum number of probes for reconnection
 #define MAX_HEARTBEAT_PROBE 3
@@ -124,19 +124,20 @@ public:
 		if (!m_inputQueue.empty() && !m_interestQueue.empty())
 		{
 			int midiBufSize = 0;
-			std::cout << "Sending Data: \n";
+			std::cout << "Sending Data: ";
 			// Send up to to max number of notes in a packet
 			while (!m_inputQueue.empty() && midiBufSize < 10){
 				midiBuf[midiBufSize] = m_inputQueue.front();
 				m_inputQueue.pop_front();
-				std::cout << "\t";
 				// Print three bytes of MIDI message
+				std::cout << "[";
 				for (int i = 0; i < 3; ++i) {
 					std::cout << " " << (int)midiBuf[midiBufSize].data[i];
 				}
-				std::cout << "\n";
+				std::cout << "] ";
 				midiBufSize++;
 			}
+			std::cout << std::endl;
 			// TODO: See if this is really how packets should be named - from logical and design standpoints
 			ndn::Name interestName = m_interestQueue.front();
 			m_interestQueue.pop_front();
@@ -173,8 +174,8 @@ private:
 		{
 			// TODO: since application is realtime
 			// maybe queue the interests and reply later???
-			std::cerr << "Received interest but no more data to send."
-					  << std::endl;
+			// std::cerr << "\nReceived interest but no more data to send."
+			// 		  << std::endl;
 		}
 
 		// Consider out-of-order or retransmitted interest
@@ -204,7 +205,7 @@ private:
 
 		if (m_connGood)
 		{
-			std::cerr << "Heartbeat!" << std::endl;
+			//std::cerr << "Heartbeat!" << std::endl;
 			m_hbCount = 0;
 			return;
 		}
@@ -222,7 +223,7 @@ private:
 															   data.getContent().value_size())
 				  << std::endl;
 
-		std::cout << "Data name: " << data.getName().toUri() << std::endl;
+		//std::cout << "Data name: " << data.getName().toUri() << std::endl;
 	}
 
 	// TODO: Implement at least a message
@@ -260,7 +261,7 @@ private:
 								std::bind(&Controller::onTimeout, this, _1),
 								std::bind(&Controller::onNetworkNack, this, _1));
 		
-		std::cerr << "Sending out interest: " << m_baseName << std::endl;
+		//std::cerr << "Sending out interest: " << m_baseName << std::endl;
 	}
 
 	// Respond to interest with data
@@ -292,11 +293,12 @@ private:
 			m_hbCount += 1;
 			// Send interest for heartbeat message
 			requestNext();
-			std::cerr << "HEARTBEAT: " << m_hbCount << std::endl;
+			//std::cerr << "HEARTBEAT: " << m_hbCount << std::endl;
 
 			if (m_hbCount > MAX_HEARTBEAT_PROBE && m_connGood)
 			{
-				std::cerr << "Heartbeat failed! Resetting connection..." << std::endl;
+				//std::cerr << "Heartbeat failed! Resetting connection..." << std::endl;
+				std::cerr << "Resetting connection..." << std::endl;
 				m_connGood = false;
 			}
 
