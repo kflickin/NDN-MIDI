@@ -112,12 +112,12 @@ public:
 	printConnections()
 	{
 		bool noConnections = true;
+		std::cout << "\n------ CONNECTIONS ------\n";
 		for (int i = 0; i < MAX_CHANNELS; i++)
 		{
 			if (channelList[i] != "")
 			{
-				std::cout << std::endl
-					<< "Channel "
+				std::cout << "Channel "
 					<< i
 					<< ": "
 					<< channelList[i]
@@ -471,7 +471,7 @@ printMenu()
 		<< "|                         |\n"
 		<< "|-------------------------|\n"
 		<< std::endl
-		<< "Please select and options: ";
+		<< "Please select an option: ";
 }
 
 void
@@ -485,7 +485,6 @@ menuListener(PlaybackModule& playbackModule)
 			printMenu();
 			getline (std::cin, listener);
 			if (listener == "0") {
-				std::cout << "Connections\n";
 				playbackModule.printConnections();
 			}
 			playbackModule.unsetViewingMenu();
