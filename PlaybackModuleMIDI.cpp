@@ -103,6 +103,12 @@ public:
 	}
 
 	void
+	unsetViewingMenu()
+	{
+		viewingMenu = false;
+	}
+
+	void
 	printConnections()
 	{
 		bool noConnections = true;
@@ -289,19 +295,23 @@ private:
 		m_lookup[remoteName].minSeqNo += diff;
 
 		// Create MIDI message for playback from data packet
-		std::cout << "Received data:";
+		std::string receivedData = "Received data:";
+		//std::cout << "Received data:";
 		for (int j = 0; j < dataSize/3; ++j){
-				std::cout << " [" << (int)buffer[(j*3)];
+				receivedData = receivedData + " [" + std::to_string((int)buffer[(j*3)]);
+				//std::cout << " [" << (int)buffer[(j*3)];
 				// for midi message
 				this->message[0] = ((unsigned char)buffer[(j*3)] & 0b11110000) | cb.channel;
 			for (int i = 1; i < 3; ++i)
 			{
-				std::cout << " " << (int)buffer[i+(j*3)];
+				receivedData = receivedData + " " + std::to_string((int)buffer[i+(j*3)]);
+				//std::cout << " " << (int)buffer[i+(j*3)];
 				// for midi message
 				this->message[i] = (unsigned char)buffer[i+(j*3)];
 
 			}
-			std::cout << " Channel: " << cb.channel << "]";
+			receivedData = receivedData + " Channel: " + std::to_string(cb.channel) + "]";
+			//std::cout << " Channel: " << cb.channel << "]";
 			//std::cout << "\n\t";
 
 			// Playback of MIDI message
@@ -321,9 +331,13 @@ private:
 		}
 		
 		// Print sequence range
-		std::cout << "\t[seq range = (" << m_lookup[remoteName].minSeqNo
-			<< "," << m_lookup[remoteName].maxSeqNo << ")]" << std::endl;
-
+		receivedData = receivedData + "\t[seq range = (" + std::to_string(m_lookup[remoteName].minSeqNo) + "," + std::to_string(m_lookup[remoteName].maxSeqNo) + ")]\n";
+		// std::cout << "\t[seq range = (" << m_lookup[remoteName].minSeqNo
+		// 	<< "," << m_lookup[remoteName].maxSeqNo << ")]" << std::endl;
+		if (!getViewingMenu())
+		{
+			std::cout << receivedData;
+		}
 		// Request next data packets based on window size
 		for (int i = 0; i < diff; ++i)
 		{
@@ -453,6 +467,7 @@ printMenu()
 		<< "| ------ Main Menu ------ |\n"
 		<< "|                         |\n"
 		<< "|View Connections: 0      |\n"
+		<< "|Exit: q                  |\n"
 		<< "|                         |\n"
 		<< "|-------------------------|\n"
 		<< std::endl
@@ -473,6 +488,7 @@ menuListener(PlaybackModule& playbackModule)
 				std::cout << "Connections\n";
 				playbackModule.printConnections();
 			}
+			playbackModule.unsetViewingMenu();
 		}
 	}
 	return;
