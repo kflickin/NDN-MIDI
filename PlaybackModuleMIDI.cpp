@@ -180,7 +180,6 @@ public:
 				std::cout << "\nWould you like to specify another device? [y/N] ";
 				std::getline( std::cin, keyHit); 
 	  		}
-	  		printAllowedDevices();
 
 	}
 
@@ -193,20 +192,28 @@ public:
 	void
 	printAllowedDevices()
 	{
+		std::cout
+			<< " ____________________________________\n"
+			<< "|     ----- Allowed Devices ----     |\n"
+			<< "|                                    |\n";
 		if (allowedDevices.empty())
 		{
-			std::cout << std::endl << "All Devices Allowed";
+			std::cout << "| All Devices Allowed                |\n";;
 		}
 		else 
 		{
-			std::cout << std::endl << "Allowed Devices: ";
+			std::cout << "| Allowed Devices:                   |\n";
 			std::set <std::string> :: iterator itr;
 			for (itr = allowedDevices.begin(); itr != allowedDevices.end(); ++ itr)
 			{
-				std::cout << *itr << " ";
+				std::cout << "|     " << *itr;
+				int spaces = 31 - (*itr).size();
+				for (int i = 0; i < spaces; i++) {
+					std::cout << " ";
+				}
+				std::cout << "|" << std::endl;
 			}
 		}
-		std::cout << std::endl;
 	}
 
 private:
