@@ -161,6 +161,14 @@ private:
 	void
 	onInterest(const ndn::Interest& interest)
 	{
+		if (interest.getName().get(-1).toUri() == "shutdown") 
+		{
+			std::cout << "Shutting Down" << std::endl;
+			throw "something";
+			return;
+		}
+
+
 		if (!m_connGood)
 		{
 			// TODO: data and interest could indeed come in out of order

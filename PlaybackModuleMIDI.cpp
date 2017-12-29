@@ -112,23 +112,101 @@ public:
 	printConnections()
 	{
 		bool noConnections = true;
-		std::cout << "\n------ CONNECTIONS ------\n";
+		std::cout
+		<< " ____________________________________\n"
+		<< "|      ----- Connections -----       |\n"
+		<< "|                                    |\n";
 		for (int i = 0; i < MAX_CHANNELS; i++)
 		{
 			if (channelList[i] != "")
 			{
-				std::cout << "Channel "
+				std::cout << "| Channel "
 					<< i
 					<< ": "
-					<< channelList[i]
-					<< std::endl
-				;
+					<< channelList[i];
+				int extraSpace = 24 - channelList[i].size();
+				for (int i = 0; i < extraSpace; i++) {
+					std::cout << " ";
+				}
+				std::cout << "|" << std::endl;
 				noConnections = false;
 			}
 		}
 		if (noConnections) {
-			std::cout << "No connections\n";
+			std::cout << "| No connections                     |\n";
 		}
+		printNavFooter();
+	}
+
+	void
+	printNavFooter()
+	{
+		std::cout 
+		<< "|                                    |\n"
+		<< "| Main Menu: m                       |\n"
+		<< "| Quit: q                            |\n"
+		<< "|____________________________________|\n"
+		<< std::endl
+		<< "Enter selection: ";
+	}
+
+	void
+	clearAllConnections()
+	{
+		m_lookup.clear();
+		for (int i = 0; i < MAX_CHANNELS; i++)
+		{
+			if (channelList[i] != "")
+			{
+				closeConnection(channelList[i]);
+			}
+			this->channelList[i] = "";
+		}
+		printConnections();
+	}
+
+	void
+	specifyConnections()
+	{
+			std::cout << "\nWould you like to specify which devices can connect? [y/N] ";
+
+			std::string keyHit;
+			std::string keyHit2;
+	  		std::getline( std::cin, keyHit);
+			while ( keyHit == "y" ) {
+				std::cout << "\nEnter device name: ";
+				std::getline( std::cin, keyHit2);
+				allowedDevices.insert(keyHit2);
+				std::cout << "\nWould you like to specify another device? [y/N] ";
+				std::getline( std::cin, keyHit); 
+	  		}
+	  		printAllowedDevices();
+
+	}
+
+	std::set <std::string>
+	getAllowedDevices()
+	{
+		return allowedDevices;
+	}
+
+	void
+	printAllowedDevices()
+	{
+		if (allowedDevices.empty())
+		{
+			std::cout << std::endl << "All Devices Allowed";
+		}
+		else 
+		{
+			std::cout << std::endl << "Allowed Devices: ";
+			std::set <std::string> :: iterator itr;
+			for (itr = allowedDevices.begin(); itr != allowedDevices.end(); ++ itr)
+			{
+				std::cout << *itr << " ";
+			}
+		}
+		std::cout << std::endl;
 	}
 
 private:
@@ -149,6 +227,15 @@ private:
 
 		// Get name of remote sending device
 		std::string remoteName = interest.getName().get(-2).toUri();
+
+		if (!allowedDevices.empty()) 
+		{
+			if (allowedDevices.find(remoteName) == allowedDevices.end())
+			{
+				std::cerr << "Connection denied: Device not permitted." << std::endl;
+				return;
+			}
+		}
 
 		// Check if connection already exists
 		if (m_lookup.count(remoteName) > 0)
@@ -183,7 +270,7 @@ private:
 			if (connectionSuccess) 
 			{
 				m_lookup[remoteName] = {0,0,0,controllerChannel};
-				std::cerr << "Connection accepted: " << interest << std::endl;
+				//std::cerr << "Connection accepted: " << interest << std::endl;
 			}
 		}
 
@@ -206,7 +293,7 @@ private:
 
 		if (!isHeartbeat)
 		{
-			SLEEP(10);
+			SLEEP(20);
 			// "Prewarm the channel" with some interest packets to avoid initial playback latency
 			for (int i = 0; i < PREWARM_AMOUNT; ++i)
 			{
@@ -407,6 +494,22 @@ private:
 		//std::cerr << "Sending out interest: " << nextName << std::endl;
 	}
 
+	private:
+	void
+	closeConnection(std::string remoteName)
+	{
+		// Create and send next interest with long interest lifetime
+		ndn::Name nextName = ndn::Name("/topo-prefix/" + remoteName + "/midi-ndn/" + m_projName + "/shutdown");
+		ndn::Interest nextNameInterest = ndn::Interest(nextName);
+		nextNameInterest.setInterestLifetime(ndn::time::seconds(10));
+		nextNameInterest.setMustBeFresh(true);
+		m_face.expressInterest(nextNameInterest,
+								std::bind(&PlaybackModule::onData, this, _2),
+								std::bind(&PlaybackModule::onNack, this, _1),
+								std::bind(&PlaybackModule::onTimeout, this, _1));
+
+	}
+
 	// Check and update/remove all control blocks every second
 	void
 	controlBlockMonitoring()
@@ -439,6 +542,7 @@ private:
 	ndn::KeyChain m_keyChain;
 	ndn::Name m_baseName;
 	std::string m_projName;
+	std::set <std::string> allowedDevices;
 
 	// Maps remote hostname (remoteName) to a control block
 	std::map<std::string, MIDIControlBlock> m_lookup;
@@ -464,12 +568,16 @@ void
 printMenu()
 {
 	std::cout 
-		<< "| ------ Main Menu ------ |\n"
-		<< "|                         |\n"
-		<< "|View Connections: 0      |\n"
-		<< "|Exit: q                  |\n"
-		<< "|                         |\n"
-		<< "|-------------------------|\n"
+		<< std::endl
+		<< " ____________________________________\n"
+		<< "|       ------ Main Menu ------      |\n"
+		<< "|                                    |\n"
+		<< "| View Connections: 0                |\n"
+		<< "| Clear Connections: 1               |\n"
+		<< "| Allowed Devices: 2                 |\n"
+		<< "|                                    |\n"
+		<< "| Exit: q                            |\n"
+		<< "|____________________________________|\n"
 		<< std::endl
 		<< "Please select an option: ";
 }
@@ -479,19 +587,51 @@ menuListener(PlaybackModule& playbackModule)
 {
 	while(playbackModule.getSetupComplete()) {
 		std::string listener = "";
+		char menuOption;
 		getline (std::cin, listener);
 		if (listener == "menu") {
 			playbackModule.setViewingMenu();
-			printMenu();
-			getline (std::cin, listener);
-			if (listener == "0") {
-				playbackModule.printConnections();
-			}
+			mainMenu:
+				printMenu();
+				//getline (std::cin, menuOption);
+				std::cin >> menuOption;
+				switch (menuOption) {
+					case '0' :
+						playbackModule.printConnections();
+						std::cin >> menuOption;
+						switch (menuOption) {
+							case 'm' :
+								goto mainMenu;
+							default :
+								break;
+						}
+						break;
+					case '1' :
+						playbackModule.clearAllConnections();
+						break;
+					case '2' :
+						playbackModule.printAllowedDevices();
+						playbackModule.printNavFooter();
+						std::cin >> menuOption;
+						switch (menuOption) {
+							case 'm' :
+								goto mainMenu;
+							default :
+								break;
+						}
+						break;
+					case 'm' :
+						goto mainMenu;
+					default :
+						break;
+
+				}
 			playbackModule.unsetViewingMenu();
 		}
 	}
 	return;
 }
+
 
 bool chooseMidiPort( RtMidiOut *rtmidi );
 
@@ -520,6 +660,8 @@ int main(int argc, char *argv[])
 
 		// Create server instance
 		PlaybackModule ndnModule(face, hostname, projname);
+
+		ndnModule.specifyConnections();
 		
 		// RtMidiOut setup
 		ndnModule.midiout = new RtMidiOut();
