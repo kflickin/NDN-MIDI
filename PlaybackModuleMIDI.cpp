@@ -108,6 +108,44 @@ public:
 		viewingMenu = false;
 	}
 
+	std::set <std::string>
+	getAllowedDevices()
+	{
+		return allowedDevices;
+	}
+
+	bool
+	getVerboseMode()
+	{
+		return verboseMode;
+	}
+
+	void
+	setVerboseMode()
+	{
+		verboseMode = true;
+	}
+
+	void
+	unsetVerboseMode()
+	{
+		verboseMode = false;
+	}
+
+	void
+	toggleVerboseMode()
+	{
+		if (verboseMode)
+		{
+			verboseMode = false;
+		}
+		else 
+		{
+			verboseMode = true;
+		}
+	}
+
+	// Print connected devices menu 
 	void
 	printConnections()
 	{
@@ -138,6 +176,7 @@ public:
 		printNavFooter();
 	}
 
+	// Print footer for menus
 	void
 	printNavFooter()
 	{
@@ -150,46 +189,7 @@ public:
 		<< "Enter selection: ";
 	}
 
-	void
-	clearAllConnections()
-	{
-		m_lookup.clear();
-		for (int i = 0; i < MAX_CHANNELS; i++)
-		{
-			if (channelList[i] != "")
-			{
-				closeConnection(channelList[i]);
-			}
-			this->channelList[i] = "";
-		}
-		printConnections();
-	}
-
-	void
-	specifyConnections()
-	{
-			std::cout << "\nWould you like to specify which devices can connect? [y/N] ";
-
-			std::string keyHit;
-			std::string keyHit2;
-	  		std::getline( std::cin, keyHit);
-			while ( keyHit == "y" ) {
-				std::cout << "\nEnter device name: ";
-				std::getline( std::cin, keyHit2);
-				allowedDevices.insert(keyHit2);
-				std::cout << "\nWould you like to specify another device? [y/N] ";
-				std::getline( std::cin, keyHit); 
-	  		}
-
-	}
-
-	std::set <std::string>
-	getAllowedDevices()
-	{
-		return allowedDevices;
-	}
-
-	void
+		void
 	printAllowedDevices()
 	{
 		std::cout
@@ -216,6 +216,95 @@ public:
 		}
 	}
 
+	void
+	printProhibitedDevices()
+	{
+		std::cout
+			<< " ____________________________________\n"
+			<< "|    ----- Prohibited Devices ----   |\n"
+			<< "|                                    |\n";
+		if (prohibitedDevices.empty())
+		{
+			std::cout << "| No devices Prohibited              |\n";
+		}
+		else 
+		{
+			std::cout << "| Prohibited Devices:                |\n";
+			std::set <std::string> :: iterator itr;
+			for (itr = prohibitedDevices.begin(); itr != prohibitedDevices.end(); ++ itr)
+			{
+				std::cout << "|     " << *itr;
+				int spaces = 31 - (*itr).size();
+				for (int i = 0; i < spaces; i++) {
+					std::cout << " ";
+				}
+				std::cout << "|" << std::endl;
+			}
+		}
+	}
+
+	void
+	printVerboseMode()
+	{
+		std::cout << std::endl;
+		if (verboseMode)
+		{
+			std::cout << "Verbose mode on. ";
+		}
+		else
+		{
+			std::cout << "Verbose mode off. ";
+		}
+		std::cout << std::endl;
+	}
+
+	// Clear all connections to external controllers
+	void
+	clearAllConnections()
+	{
+		m_lookup.clear();
+		for (int i = 0; i < MAX_CHANNELS; i++)
+		{
+			if (channelList[i] != "")
+			{
+				closeConnection(channelList[i]);
+			}
+			this->channelList[i] = "";
+		}
+		printConnections();
+	}
+
+	// Interface to set allowed and prohibited devices
+	void
+	specifyConnections()
+	{
+			std::cout << "\nWould you like to specify which devices can connect? [y/N] ";
+
+			std::string keyHit;
+			std::string keyHit2;
+	  		std::getline( std::cin, keyHit);
+			while ( keyHit == "y" ) {
+				std::cout << "\nEnter device name: ";
+				std::getline( std::cin, keyHit2);
+				allowedDevices.insert(keyHit2);
+				std::cout << "\nWould you like to specify another device? [y/N] ";
+				std::getline( std::cin, keyHit); 
+	  		}
+
+	  		std::cout << "\nWould you like to specify which devices are prohibited? [y/N] ";
+
+	  		std::getline( std::cin, keyHit);
+			while ( keyHit == "y" ) {
+				std::cout << "\nEnter device name: ";
+				std::getline( std::cin, keyHit2);
+				prohibitedDevices.insert(keyHit2);
+				std::cout << "\nWould you like to specify another device? [y/N] ";
+				std::getline( std::cin, keyHit); 
+	  		}
+
+	}
+
+
 private:
 
 		
@@ -235,11 +324,32 @@ private:
 		// Get name of remote sending device
 		std::string remoteName = interest.getName().get(-2).toUri();
 
+		// Check if device is allowed
+		// Close connection if not allowed
 		if (!allowedDevices.empty()) 
 		{
 			if (allowedDevices.find(remoteName) == allowedDevices.end())
 			{
-				std::cerr << "Connection denied: Device not permitted." << std::endl;
+				if (!viewingMenu)
+				{
+					std::cerr << "Connection denied: Device not allowed: " << remoteName << std::endl;
+				}
+				closeConnection(remoteName);
+				return;
+			}
+		}
+
+		// Check if device is prohibited
+		// Close connection if prohibited
+		if (!prohibitedDevices.empty()) 
+		{
+			if (prohibitedDevices.find(remoteName) != prohibitedDevices.end())
+			{
+				if (!viewingMenu)
+				{
+					std::cerr << "Connection denied: Device prohibited." << remoteName << std::endl;
+				}
+				closeConnection(remoteName);
 				return;
 			}
 		}
@@ -247,7 +357,9 @@ private:
 		// Check if connection already exists
 		if (m_lookup.count(remoteName) > 0)
 		{
-			//std::cerr << "Received heartbeat message: " << interest << std::endl;
+			if (verboseMode && !viewingMenu) {
+				std::cerr << "Received heartbeat message: " << interest << std::endl;
+			}
 			isHeartbeat = true;
 			m_lookup[remoteName].inactiveTime = 0;
 		}
@@ -277,7 +389,10 @@ private:
 			if (connectionSuccess) 
 			{
 				m_lookup[remoteName] = {0,0,0,controllerChannel};
-				//std::cerr << "Connection accepted: " << interest << std::endl;
+				if (verboseMode && !viewingMenu)
+				{
+					std::cerr << "Connection accepted: " << interest << std::endl;
+				}
 			}
 		}
 
@@ -372,15 +487,21 @@ private:
 		if (cb.minSeqNo > seqNo)
 		{
 			// out-of-date data, drop
-			std::cerr << "Received out-of-date packet... Dropped" << std::endl;
+			if (verboseMode && !viewingMenu)
+			{
+				std::cerr << "Received out-of-date packet... Dropped" << std::endl;
+			}
 			return;
 		}
 		else if (cb.maxSeqNo < seqNo)
 		{
 			// drop this, too
-			std::cerr << "Received packet w/ seq# somehow larger than "
-					  << "expected max value: " << seqNo
-					  << " (" << cb.maxSeqNo << ")" << std::endl;
+			if (verboseMode && !viewingMenu)
+			{
+				std::cerr << "Received packet w/ seq# somehow larger than "
+						  << "expected max value: " << seqNo
+						  << " (" << cb.maxSeqNo << ")" << std::endl;
+			}
 			return;
 		}
 
@@ -444,7 +565,10 @@ private:
 	onTimeout(const ndn::Interest& interest)
 	{
 		// re-express interest
-		std::cerr << "Timeout for: " << interest << std::endl;
+		if (verboseMode && !viewingMenu)
+		{
+			std::cerr << "Timeout for: " << interest << std::endl;
+		}
 		//m_face.expressInterest(interest,
 		//						std::bind(&PlaybackModule::onData, this, _2),
 		//						std::bind(&PlaybackModule::onTimeout, this, _1));
@@ -455,7 +579,10 @@ private:
 	void 
 	onNack(const ndn::Interest& interest)
 	{
-		std::cerr << "Nack received for: " << interest << std::endl;
+		if (verboseMode && !viewingMenu)
+		{
+			std::cerr << "Nack received for: " << interest << std::endl;
+		}
 	}
 	
 
@@ -466,10 +593,13 @@ private:
 		// Check if connection exists
 		if (m_lookup.count(remoteName) == 0)
 		{
-			std::cerr << "Attempted to request from non-existent remote: "
-					  << remoteName
-					  << " - DROPPED"
-					  << std::endl;
+			if (verboseMode && !viewingMenu)
+			{
+				std::cerr << "Attempted to request from non-existent remote: "
+						  << remoteName
+						  << " - DROPPED"
+						  << std::endl;
+			}
 			return;
 		}
 
@@ -501,6 +631,7 @@ private:
 		//std::cerr << "Sending out interest: " << nextName << std::endl;
 	}
 
+	// Close the connection with remoteName
 	private:
 	void
 	closeConnection(std::string remoteName)
@@ -536,7 +667,7 @@ private:
 
 			for (std::string& remoteName : rmList)
 			{
-				std::cerr << "Deleting table entry because no heartbeat request received for too long: "
+				std::cerr << "Deleting connection because it is not active: "
 						  << remoteName << std::endl;
 				channelList[m_lookup[remoteName].channel] = "";
 				m_lookup.erase(remoteName);
@@ -549,7 +680,12 @@ private:
 	ndn::KeyChain m_keyChain;
 	ndn::Name m_baseName;
 	std::string m_projName;
+
+	// Devices that are explicity stated as allowed
 	std::set <std::string> allowedDevices;
+
+	// Devices that are explicity stated as prohibited 
+	std::set <std::string> prohibitedDevices;
 
 	// Maps remote hostname (remoteName) to a control block
 	std::map<std::string, MIDIControlBlock> m_lookup;
@@ -563,6 +699,8 @@ private:
 	bool setupComplete = false;
 
 	bool viewingMenu = false;
+
+	bool verboseMode = false;
 
 public:
 	RtMidiOut *midiout;
@@ -582,7 +720,9 @@ printMenu()
 		<< "| View Connections: 0                |\n"
 		<< "| Clear Connections: 1               |\n"
 		<< "| Allowed Devices: 2                 |\n"
+		<< "| Prohibited Devices: 3              |\n"
 		<< "|                                    |\n"
+		<< "| Toggle verbose mode: v             |\n"
 		<< "| Exit: q                            |\n"
 		<< "|____________________________________|\n"
 		<< std::endl
@@ -627,6 +767,21 @@ menuListener(PlaybackModule& playbackModule)
 								break;
 						}
 						break;
+					case '3' :
+						playbackModule.printProhibitedDevices();
+						playbackModule.printNavFooter();
+						std::cin >> menuOption;
+						switch (menuOption) {
+							case 'm' :
+								goto mainMenu;
+							default :
+								break;
+						}
+						break;
+					case 'v' :
+						playbackModule.toggleVerboseMode();
+						playbackModule.printVerboseMode();
+						goto mainMenu;
 					case 'm' :
 						goto mainMenu;
 					default :
@@ -692,22 +847,6 @@ int main(int argc, char *argv[])
   		ndnModule.message[1] = 7;
   		ndnModule.message.push_back( 100 );
   		ndnModule.midiout->sendMessage( &ndnModule.message );
-
-  // 		// TODO: Remove if unnecessary
-  // 		// Note On: 144, 64, 90
-  // 		ndnModule.message[0] = 144;
-  // 		ndnModule.message[1] = 64;
-  // 		ndnModule.message[2] = 90;
-  // 		ndnModule.midiout->sendMessage( &ndnModule.message );
-
-  // 		SLEEP( 500 );
-
-		// // TODO: Remove if unnecessary
-  // 		// Note Off: 128, 64, 40
-  // 		ndnModule.message[0] = 144;
-  // 		ndnModule.message[1] = 64;
-  // 		ndnModule.message[2] = 0;
-  // 		ndnModule.midiout->sendMessage( &ndnModule.message );
 
   		SLEEP( 500 );
 
