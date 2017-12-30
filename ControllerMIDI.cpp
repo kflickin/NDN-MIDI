@@ -339,6 +339,17 @@ public:
 	RtMidiIn *midiin;
 };
 
+void
+printTitle()
+{
+	std::cout
+		<< " _________________________\n"
+		<< "|                         |\n"
+		<< "|         NDN-MIDI        |\n" 
+		<< "|        Controller       |\n"
+		<< "|_________________________|\n";
+}
+
 // now basically what midiLoopNoBlock() is doing
 void input_listener(Controller& controller)
 {
@@ -447,6 +458,7 @@ int main(int argc, char *argv[])
 		projName = argv[3];
 	}
 
+	printTitle();
 
 	try {
 		// Create Face instance

@@ -707,7 +707,16 @@ public:
 	std::vector<unsigned char> message;
 };
 
-
+void
+printTitle()
+{
+	std::cout
+		<< " _________________________\n"
+		<< "|                         |\n"
+		<< "|         NDN-MIDI        |\n"  
+		<< "|     Playback Module     |\n"
+		<< "|_________________________|\n";
+}
 
 void
 printMenu()
@@ -815,6 +824,8 @@ int main(int argc, char *argv[])
 		// TODO: Add check for projname format
 		projname = argv[2];
 	}
+
+	printTitle();
 
 	try {
 		// Create Face instance
