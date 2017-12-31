@@ -877,11 +877,11 @@ bool chooseMidiPort( RtMidiOut *rtmidi )
 {
   
 
-  std::cout << "\nWould you like to open a virtual output port? [y/N] ";
+  std::cout << "\nWould you like to open a virtual NDN-MIDI output port? [y/N] ";
 
   std::string keyHit;
   std::getline( std::cin, keyHit);
-  std::string keyHit2 = "NDN";
+  std::string keyHit2 = "NDN-MIDI Playback";
   if ( keyHit == "y" ) {
   	//std::cout << "Name your port: ";
   	//std::getline( std::cin, keyHit2);

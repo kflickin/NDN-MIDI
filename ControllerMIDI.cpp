@@ -161,11 +161,19 @@ private:
 	void
 	onInterest(const ndn::Interest& interest)
 	{
-		if (interest.getName().get(-1).toUri() == "shutdown") 
+		try 
 		{
-			std::cout << "Shutting Down" << std::endl;
-			throw "something";
-			return;
+			if (interest.getName().get(-1).toUri() == "shutdown") 
+			{
+				std::cout << "Shutting Down" << std::endl;
+				throw "e";
+				return;
+			}
+		}
+		catch (const char* e) 
+		{
+		std::cerr << "Disconnected from Playback Module" << std::endl;
+		exit(1);
 		}
 
 
@@ -500,7 +508,7 @@ int main(int argc, char *argv[])
 bool chooseMidiPort( RtMidiIn *rtmidi )
 {
 
-   std::cout << "\nWould you like to open a virtual input port? [y/N] ";
+   std::cout << "\nWould you like to open a virtual NDN-MIDI input port? [y/N] ";
 
   std::string keyHit;
   std::getline( std::cin, keyHit );
