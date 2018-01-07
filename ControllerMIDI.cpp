@@ -131,7 +131,8 @@ public:
 				m_inputQueue.pop_front();
 				// Print three bytes of MIDI message
 				std::cout << "[";
-				for (int i = 0; i < 3; ++i) {
+				std::cout << " " << (((unsigned int)midiBuf[midiBufSize].data[0] >> 4) & 15);
+				for (int i = 1; i < 3; ++i) {
 					std::cout << " " << (int)midiBuf[midiBufSize].data[i];
 				}
 				std::cout << "] ";

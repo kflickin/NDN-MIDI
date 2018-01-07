@@ -513,7 +513,7 @@ private:
 		std::string receivedData = "Received data:";
 		//std::cout << "Received data:";
 		for (int j = 0; j < dataSize/3; ++j){
-				receivedData = receivedData + " [" + std::to_string((int)buffer[(j*3)]);
+				receivedData = receivedData + " [" + std::to_string(((int)buffer[(j*3)] >> 4) & 15);
 				//std::cout << " [" << (int)buffer[(j*3)];
 				// for midi message
 				this->message[0] = ((unsigned char)buffer[(j*3)] & 0b11110000) | cb.channel;
