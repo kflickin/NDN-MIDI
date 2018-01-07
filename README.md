@@ -7,7 +7,7 @@ Named-Data Networking:
 * [ndn-cxx](https://github.com/named-data/ndn-cxx) - NDN C++ library with eXperimental eXtensions
 * [NFD](https://github.com/named-data/NFD) - NDN Forwarding Daemon
 
-We recommend to install these applications to use in conjunction:
+We recommend the following MIDI applications for testing:
 
 * [vmpk](http://vmpk.sourceforge.net/) - to replace an actual electronic keyboard for MIDI input (used by ControllerMIDI)
 * [SimpleSynth](http://notahat.com/simplesynth/) - a simple synthesizer program for MIDI playback (used by PlaybackModuleMIDI)
@@ -30,4 +30,4 @@ To launch the controller, you need to provide the name of the playback module yo
 ./ControllerMIDI <playback-module-name> <controller-name> [optional-project-name]
 ```
 
-If you connect remotely, controller will need to know playback module's name, but playback module doesn't have to know controllers' name. If you specify a project name, playback module and controller will have to agree on the project name, too.
+For additional configuration and usage information, see ndnmidi.pdf

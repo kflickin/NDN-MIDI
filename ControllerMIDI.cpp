@@ -66,7 +66,7 @@ public:
 								 });
 	}
 
-public:
+
 	// Add a MIDIMessage to the input queue
 	void
 	addInput(MIDIMessage msg)
@@ -89,24 +89,6 @@ public:
 		}
 		addInput(midiMsg);
 	}
-
-	// TODO: Remove if unnecessary 
-	// Added for MIDI message vector
-	// void
-	// addInput(std::vector< unsigned char > msg)
-	// {
-	// 	MIDIMessage midiMsg;
-	// 	for (unsigned int i = 0; i < 3; ++i)
-	// 	{
-	// 		if (i >= msg.size())
-	// 			midiMsg.data[i] = 0;
-	// 		else
-	// 			msg[0] = 'a';
-	// 			midiMsg.data[i] = msg[i];
-	// 	}
-	// 	addInput(midiMsg);
-	// }
-
 	
 	// If input and interest queues are not empty
 	// sends up to maxBufSize midi messages in a packet
@@ -139,7 +121,8 @@ public:
 				midiBufSize++;
 			}
 			std::cout << std::endl;
-			// TODO: See if this is really how packets should be named - from logical and design standpoints
+			
+			// Name data packet using interest sequence number
 			ndn::Name interestName = m_interestQueue.front();
 			m_interestQueue.pop_front();
 
@@ -154,7 +137,6 @@ private:
 	onSuccess(const ndn::Name& prefix)
 	{
 		std::cerr << "Prefix registered" << std::endl;
-		//requestNext();
 		heartbeatProbe = std::thread(&Controller::sendHeartbeat, this);
 	}
 
@@ -180,7 +162,6 @@ private:
 
 		if (!m_connGood)
 		{
-			// TODO: data and interest could indeed come in out of order
 			std::cerr << "Connection not set up yet!?" << std::endl;
 			return;
 		}
@@ -189,15 +170,13 @@ private:
 
 		if (m_inputQueue.empty())
 		{
-			// TODO: since application is realtime
-			// maybe queue the interests and reply later???
 			// std::cerr << "\nReceived interest but no more data to send."
 			// 		  << std::endl;
 		}
 
 		// Consider out-of-order or retransmitted interest
 		int seqNo = interest.getName().get(-1).toSequenceNumber();
-		//if (seqNo == m_maxSeqNo)	// strict order
+		
 		if (seqNo >= m_maxSeqNo)
 		{
 			m_interestQueue.push_back(interest.getName());
@@ -216,7 +195,6 @@ private:
 		// Exit if not a heartbeat message
 		if (data.getName().get(-1).toUri() != "heartbeat")
 		{
-			//std::cerr << ":P" << std::endl;
 			return;
 		}
 
@@ -227,8 +205,7 @@ private:
 			return;
 		}
 
-		// Set up connection (maybe do some checking here...)
-		// But currently, "handshake" doesn't contain any data
+		// Set up connection
 		m_connGood = true;
 		m_hbCount = 0;
 		m_inputQueue.clear();
@@ -243,7 +220,7 @@ private:
 		//std::cout << "Data name: " << data.getName().toUri() << std::endl;
 	}
 
-	// TODO: Implement at least a message
+	// For future: Maybe implement at least a message
 	void
 	onTimeout(const ndn::Interest& interest)
 	{
@@ -254,14 +231,13 @@ private:
 		//						std::bind(&Controller::onTimeout, this, _1));
 	}
 	
-	// TODO: Implement at least a message
+	// For future: Maybe implement at least a message
 	void
 	onNetworkNack(const ndn::Interest& interest)
 	{
 
 	}
 
-private:
 	// Request heartbeat from playback module
 	void
 	requestNext()
@@ -323,7 +299,6 @@ private:
 		}
 	}
 
-private:
 	ndn::Face& m_face;
 	ndn::KeyChain m_keyChain;
 	ndn::Name m_baseName;
@@ -359,7 +334,7 @@ printTitle()
 		<< "|_________________________|\n";
 }
 
-// now basically what midiLoopNoBlock() is doing
+// Currently unused
 void input_listener(Controller& controller)
 {
 	while (true)
@@ -370,7 +345,6 @@ void input_listener(Controller& controller)
 			controller.addInput("");
 			break;
 		}
-		// TODO: Determine correct time length
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 	}
 }
@@ -385,7 +359,8 @@ void output_sender(Controller& controller)
 }
 
 // Beginning of RtMidi functions
-void usage( void ) {
+void usage( void ) 
+{
   // Error function in case of incorrect command-line
   // argument specifications.
   std::cout << "\nuseage: cmidiin <port>\n";
@@ -393,6 +368,8 @@ void usage( void ) {
   exit( 0 );
 }
 
+// Callback function for midi messages
+// Currently unused RtMidi function
 void mycallback( double deltatime, std::vector< unsigned char > *message, void */*userData*/ )
 {
   unsigned int nBytes = message->size();
@@ -402,6 +379,7 @@ void mycallback( double deltatime, std::vector< unsigned char > *message, void *
     std::cout << "stamp = " << deltatime << std::endl;
 }
 
+// Currently unused RtMidi function
 void bytecallback( double deltatime, std::vector< unsigned char > *message, void */*userData*/ )
 {
   unsigned int nBytes = message->size();
@@ -412,12 +390,15 @@ void bytecallback( double deltatime, std::vector< unsigned char > *message, void
 // It returns false if there are no ports available.
 bool chooseMidiPort( RtMidiIn *rtmidi );
 
-//Used in thread to get incoming midi messages
-void midiLoop(char input){
+// Used in thread to get incoming midi messages
+void midiLoop(char input)
+{
 	std::cin.get(input);
 }
 
-void midiLoopNoBlock(RtMidiIn *midiin, std::vector<unsigned char> message, Controller& controller){
+// Non-blocking function to get MIDI messages
+void midiLoopNoBlock(RtMidiIn *midiin, std::vector<unsigned char> message, Controller& controller)
+{
 	bool done = false;
 	double stamp;
 	int nBytes;
@@ -451,7 +432,6 @@ int main(int argc, char *argv[])
 	
 	if (argc > 2)
 	{
-		// TODO: check formatting
 		remoteName = argv[1];
 		devName = argv[2];
 	}
@@ -463,13 +443,13 @@ int main(int argc, char *argv[])
 
 	if (argc > 3)
 	{
-		// TODO: Check formatting
 		projName = argv[3];
 	}
 
 	printTitle();
 
-	try {
+	try 
+	{
 		// Create Face instance
 		ndn::Face face;
 
@@ -497,10 +477,11 @@ int main(int argc, char *argv[])
 		// Start processing loop (it will block forever)
 		face.processEvents();
 	}
-	catch (const std::exception& e) {
+	catch (const std::exception& e)
+	{
 		std::cerr << "ERROR: " << e.what() << std::endl;
 	}
-	//DELETE RtMidiIn instance
+	// delete RtMidiIn instance
     cleanup:
 	// 	delete midiin;
 	return 0;
@@ -521,21 +502,25 @@ bool chooseMidiPort( RtMidiIn *rtmidi )
 
   std::string portName;
   unsigned int i = 0, nPorts = rtmidi->getPortCount();
-  if ( nPorts == 0 ) {
+  if ( nPorts == 0 )
+  {
     std::cout << "No input ports available!" << std::endl;
     return false;
   }
-
-  if ( nPorts == 1 ) {
+  if ( nPorts == 1 )
+  {
     std::cout << "\nOpening " << rtmidi->getPortName() << std::endl;
   }
-  else {
-    for ( i=0; i<nPorts; i++ ) {
+  else
+  {
+    for ( i=0; i<nPorts; i++ )
+    {
       portName = rtmidi->getPortName(i);
       std::cout << "  Input port #" << i << ": " << portName << '\n';
     }
 
-    do {
+    do
+    {
       std::cout << "\nChoose a port number: ";
       std::cin >> i;
     } while ( i >= nPorts );

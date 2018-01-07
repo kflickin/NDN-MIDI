@@ -189,7 +189,7 @@ public:
 		<< "Enter selection: ";
 	}
 
-		void
+	void
 	printAllowedDevices()
 	{
 		std::cout
@@ -306,7 +306,6 @@ public:
 
 
 private:
-
 		
 	// Respond to interest as heartbeat message or connection setup	
 	void
@@ -447,8 +446,7 @@ private:
 			return;
 		}
 
-		// TODO: CHECKPOINT 2: sequence number agrees
-		// Now: done later
+		// Possibly for future: CHECKPOINT 2: sequence number agrees
 		//if (m_lookup[remoteName].minSeqNo >= m_lookup[remoteName].maxSeqNo)
 		//{
 		//	// behavior yet to be defined......
@@ -464,9 +462,9 @@ private:
 		//			  << std::endl;
 		//}
 
-		// TODO: Verify data is in correct format
 		char buffer[30];
 		int dataSize = data.getContent().value_size();
+		// Possibly got future:
 		// if (data.getContent().value_size() != 3)
 		// {
 		// 	// incorrect data format
@@ -495,7 +493,6 @@ private:
 		}
 		else if (cb.maxSeqNo < seqNo)
 		{
-			// drop this, too
 			if (verboseMode && !viewingMenu)
 			{
 				std::cerr << "Received packet w/ seq# somehow larger than "
@@ -564,7 +561,7 @@ private:
 	void
 	onTimeout(const ndn::Interest& interest)
 	{
-		// re-express interest
+		// For future: Possibly more than a message
 		if (verboseMode && !viewingMenu)
 		{
 			std::cerr << "Timeout for: " << interest << std::endl;
@@ -574,11 +571,10 @@ private:
 		//						std::bind(&PlaybackModule::onTimeout, this, _1));
 	}
 
-	// TODO: Implement this if deemed necessary
-	// Possibly just a message
 	void 
 	onNack(const ndn::Interest& interest)
 	{
+		// For future: Possibly more than a message
 		if (verboseMode && !viewingMenu)
 		{
 			std::cerr << "Nack received for: " << interest << std::endl;
@@ -605,7 +601,7 @@ private:
 
 		int nextSeqNo = m_lookup[remoteName].maxSeqNo;
 		
-		// TODO: Determine if below should be removed
+		// Possible implementation without specifying interest lifetime
 		/** Send interest without specifying interest lifetime 
 
 		ndn::Name nextName = ndn::Name(m_baseName).appendSequenceNumber(nextSeqNo);
@@ -847,13 +843,8 @@ int main(int argc, char *argv[])
 
 		SLEEP( 500 );
 
-		// // // TODO: Remove if unnecessary
-  // 		ndnModule.message[0] = 0xF1;
-  // 		ndnModule.message[1] = 60;
-  // 		ndnModule.midiout->sendMessage( &ndnModule.message );
 
-  // 		// TODO: Remove if unnecessary
-  // 		// Control Change: 176, 7, 100 (volume)
+		// Control Change: 176, 7, 100 (volume)
   		ndnModule.message[0] = 176;
   		ndnModule.message[1] = 7;
   		ndnModule.message.push_back( 100 );
